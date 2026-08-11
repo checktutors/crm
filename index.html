@@ -609,27 +609,66 @@ function buildDetail(s){
   }
   function psec(label){return `<div class="prof-sec">${label}</div>`;}
   function prow(label,val){if(!val||val===""||( Array.isArray(val)&&!val.length))return"";return `<div class="prof-row"><div class="prof-label">${label}</div><div class="prof-val">${Array.isArray(val)?val.join(", "):val}</div></div>`;}
+  // Upcoming sessions for this student
+  const upcomingSessions=(db.events||[]).filter(e=>e.studentId===s.id&&e.date>=today()&&!e.logged).sort((a,b)=>a.date.localeCompare(b.date));
+  const nextSession=upcomingSessions[0]||null;
+  const upcomingHTML=upcomingSessions.length===0
+    ?`<div style="font-size:13px;color:var(--soft);padding:8px 0">No upcoming sessions scheduled. <button class="btn btn-secondary btn-sm" onclick="openLogSession('${s.id}')">+ Schedule one</button></div>`
+    :upcomingSessions.slice(0,3).map(ev=>{
+      const meetLink=ev.meetLink||p.meetLink||"";
+      const meetLabel=p.meetLabel||"Meet";
+      return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--navy-light);border-radius:10px;margin-bottom:8px;flex-wrap:wrap">
+        <div style="font-size:28px">&#128197;</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:15px;color:var(--navy)">${fmt(ev.date)}${ev.time?" at "+ev.time:""}</div>
+          <div style="font-size:13px;color:var(--soft);margin-top:2px">${ev.hours||1}h ${ev.notes?("— "+ev.notes):""}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${meetLink?`<a href="${meetLink}" target="_blank" class="btn btn-sm" style="background:#e8f5e9;color:#2e7d32;border:1.5px solid #c8e6c9;text-decoration:none;padding:6px 12px;border-radius:9px;font-size:12px;font-weight:600">&#128222; ${meetLabel}</a>`:""}
+          <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:1.5px solid #bbf7d0;font-size:12px" onclick="markDone('${ev.id}')">&#10003; Mark Done</button>
+        </div>
+      </div>`;
+    }).join("");
+
   const profHTML=`
     <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
       <button class="btn btn-secondary btn-sm" onclick="openEditProfile('${s.id}')">&#9998; Edit Profile</button>
     </div>
+
+    ${psec("&#128197; Upcoming Sessions")}
+    ${upcomingHTML}
+
+    ${(p.classroomLink||p.meetLink)?`
+    ${psec("&#127891; Quick Links")}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;padding:8px 0">
+      ${p.classroomLink?`<a href="${p.classroomLink}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;font-size:13px">&#127979; Google Classroom &#8599;</a>`:""}
+      ${p.meetLink?`<a href="${p.meetLink}" target="_blank" class="btn btn-sm" style="background:#e8f5e9;color:#2e7d32;border:1.5px solid #c8e6c9;text-decoration:none;padding:8px 15px;border-radius:9px;font-size:13px;font-weight:600">&#128222; ${p.meetLabel||"Meet"} &#8599;</a>`:""}
+    </div>`:""}
+
     ${psec("&#128100; Parent / Guardian")}
     ${prow("Parent Name",p.parentName)}${prow("Parent Email",p.parentEmail)}${prow("Parent Phone",p.parentPhone)}${prow("Preferred Contact",p.commPref)}
+
     ${psec("&#127892; Student")}
     ${prow("Age",p.age)}${prow("School",p.school)}${prow("Pronouns",p.pronouns)}${prow("Student Email",p.studentEmail)}${prow("Student Phone",p.studentPhone)}
-    ${psec("&#127891; Links")}
-    ${p.classroomLink?`<div class="prof-row"><div class="prof-label">Google Classroom</div><div class="prof-val"><a href="${p.classroomLink}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none">&#127979; Open Classroom &#8599;</a></div></div>`:""}
-    ${p.meetLink?`<div class="prof-row"><div class="prof-label">${p.meetLabel||"Meet / Video"}</div><div class="prof-val"><a href="${p.meetLink}" target="_blank" class="btn btn-sm" style="background:#e8f5e9;color:#2e7d32;border:1.5px solid #c8e6c9;text-decoration:none;padding:6px 12px;border-radius:9px;font-size:13px;font-weight:600">&#128222; ${p.meetLabel||"Open Meet"} &#8599;</a></div></div>`:""}
+
     ${psec("&#128218; Academic")}
     ${prow("Subjects",p.subjects)}${prow("Current Average",p.currentAvg)}${prow("Reason for Tutoring",p.reasons)}
     ${prow("Topics Needing Help",p.topics)}${prow("Strengths",p.strengths)}${prow("Challenges",p.challenges)}
     ${prow("School Accommodations",p.accommodations)}
-    ${psec("&#128197; Scheduling")}
+
+    ${psec("&#128197; Scheduling Preferences")}
     ${prow("Services",p.services)}${prow("Frequency",p.frequency)}${prow("Format",p.format)}
     ${prow("Preferred Days",p.preferredDays)}${prow("Preferred Time",p.preferredTime)}
-    ${psec("&#129504; Learning")}
+
+    ${psec("&#129504; Learning Style")}
     ${prow("Learning Style",p.learningStyle)}${prow("Success Looks Like",p.successLooks)}
-    ${prow("Additional Notes",p.extra)}${prow("How They Heard About Us",p.referral)}
+    ${prow("How They Heard About Us",p.referral)}
+
+    ${s.notes||p.extra?`
+    ${psec("&#128203; Notes")}
+    ${s.notes?`<div class="prof-row"><div class="prof-label">Tutor Notes</div><div class="prof-val" style="white-space:pre-wrap">${s.notes}</div></div>`:""}
+    ${p.extra?`<div class="prof-row"><div class="prof-label">Additional Notes</div><div class="prof-val" style="white-space:pre-wrap">${p.extra}</div></div>`:""}
+    `:""}
   `||`<div class="empty"><div class="empty-icon">&#128100;</div><p>No profile info yet. Click Edit Profile to add details.</p></div>`;
 
   const clHTML=CL.map(sec=>{
@@ -640,7 +679,7 @@ function buildDetail(s){
   const docs=s.docs||[];
   const docsHTML=docs.map(d=>`<div class="doc-item" onclick="openDoc('${d.id}','${s.id}')"><span style="font-size:22px">${docIcon(d.name)}</span><div style="flex:1;min-width:0"><div class="doc-name">${d.name}</div><div style="font-size:11px;color:var(--soft)">${d.size} - ${d.date}</div></div><button class="btn-icon" title="Download" onclick="event.stopPropagation();openDoc('${d.id}','${s.id}')">&#11015;&#65039;</button><button class="btn-icon" onclick="event.stopPropagation();deleteDoc('${s.id}','${d.id}')">&#128465;&#65039;</button></div>`).join("")+`<label class="upload-zone" for="up-${s.id}">&#128206; Click to upload documents or contracts</label><input type="file" id="up-${s.id}" style="display:none" multiple onchange="handleUpload('${s.id}',this)"/>`;
 
-  return `<div style="margin-bottom:16px"><button class="btn btn-secondary btn-sm" onclick="showList();renderList()">&#8592; Back</button></div><div class="card"><div class="detail-hd"><div class="detail-av">${init}</div><div><div class="detail-name">${s.name}</div><div class="detail-sub">Gr. ${s.grade} - ${s.subject} - ${s.contact||"No contact"}</div></div><div class="detail-acts">${p.classroomLink?`<a href="${p.classroomLink}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none">&#127979; Classroom</a>`:""} ${p.meetLink?`<a href="${p.meetLink}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;background:#e8f5e9;color:#2e7d32;border-color:#c8e6c9">${p.meetLabel||"Meet"} &#128222;</a>`:""}<button class="btn btn-secondary btn-sm" onclick="openEditProfile('${s.id}')">&#9998; Edit Profile</button><button class="btn btn-secondary btn-sm" onclick="openLogSession('${s.id}')">+ Log Session</button><button class="btn btn-primary btn-sm" onclick="openRenew('${s.id}')">&#128260; Renew</button><button class="btn btn-secondary btn-sm" onclick="toggleArchive('${s.id}')">${s.archived?"Unarchive":"Archive"}</button><button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button></div></div><div class="stat-grid" style="margin-bottom:0"><div class="stat-card c-navy"><div class="stat-label">Total Sessions</div><div class="stat-value">${sessions.length}</div></div><div class="stat-card c-green"><div class="stat-label">Total Hours</div><div class="stat-value">${h.total}</div></div><div class="stat-card c-blue"><div class="stat-label">Hours Left</div><div class="stat-value">${h.remaining.toFixed(1)}</div><div class="stat-sub">current package</div></div><div class="stat-card c-amber"><div class="stat-label">Onboarding</div><div class="stat-value">${clP.pct}%</div><div class="stat-sub">${clP.done}/${clP.total} done</div></div></div></div><div class="tabs" id="dtabs-${s.id}"><div class="tab active" onclick="switchTab('${s.id}','packages',this)">&#128230; Package</div><div class="tab" onclick="switchTab('${s.id}','sessions',this)">&#128221; Sessions</div><div class="tab" onclick="switchTab('${s.id}','profile',this)">&#128100; Profile</div><div class="tab" onclick="switchTab('${s.id}','checklist',this)">&#9989; Onboarding</div><div class="tab" onclick="switchTab('${s.id}','docs',this)">&#128193; Documents</div></div><div id="dt-packages-${s.id}">${pkgHTML}</div><div id="dt-sessions-${s.id}" style="display:none"><div class="card">${sessions.length===0?`<div class="empty"><p>No sessions yet.</p></div>`:`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Hours</th><th>Notes</th><th></th></tr></thead><tbody>${sessions.map(ss=>`<tr><td>${fmt(ss.date)}</td><td><strong>${ss.hours}h</strong></td><td style="color:var(--soft);font-size:13px;max-width:280px">${ss.notes||"--"}</td><td><button class="btn-icon" onclick="delSession('${ss.id}','${s.id}')">&#128465;&#65039;</button></td></tr>`).join("")}</tbody></table></div>`}</div></div><div id="dt-profile-${s.id}" style="display:none"><div class="card">${profHTML}</div></div><div id="dt-checklist-${s.id}" style="display:none"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div><strong>${clP.done}/${clP.total}</strong> items complete</div>${clP.done===clP.total?`<span class="badge b-green">&#127881; Fully onboarded!</span>`:""}</div>${clHTML}</div></div><div id="dt-docs-${s.id}" style="display:none"><div class="card">${docsHTML}</div></div>`;
+  return `<div style="margin-bottom:16px"><button class="btn btn-secondary btn-sm" onclick="showList();renderList()">&#8592; Back</button></div><div class="card"><div class="detail-hd"><div class="detail-av">${init}</div><div><div class="detail-name">${s.name}</div><div class="detail-sub">Gr. ${s.grade} - ${s.subject} - ${s.contact||"No contact"}</div></div><div class="detail-acts">${p.classroomLink?`<a href="${p.classroomLink}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none">&#127979; Classroom</a>`:""} ${p.meetLink?`<a href="${p.meetLink}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;background:#e8f5e9;color:#2e7d32;border-color:#c8e6c9">${p.meetLabel||"Meet"} &#128222;</a>`:""}<button class="btn btn-secondary btn-sm" onclick="openEditProfile('${s.id}')">&#9998; Edit Profile</button><button class="btn btn-secondary btn-sm" onclick="openLogSession('${s.id}')">+ Log Session</button><button class="btn btn-primary btn-sm" onclick="openRenew('${s.id}')">&#128260; Renew</button><button class="btn btn-secondary btn-sm" onclick="toggleArchive('${s.id}')">${s.archived?"Unarchive":"Archive"}</button><button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button></div></div><div class="stat-grid" style="margin-bottom:0"><div class="stat-card c-navy"><div class="stat-label">Total Sessions</div><div class="stat-value">${sessions.length}</div></div><div class="stat-card c-green"><div class="stat-label">Total Hours</div><div class="stat-value">${h.total}</div></div><div class="stat-card c-blue"><div class="stat-label">Hours Left</div><div class="stat-value">${h.remaining.toFixed(1)}</div><div class="stat-sub">current package</div></div><div class="stat-card c-amber"><div class="stat-label">Onboarding</div><div class="stat-value">${clP.pct}%</div><div class="stat-sub">${clP.done}/${clP.total} done</div></div><div class="stat-card c-purple" style="border-left:4px solid var(--purple)"><div class="stat-label">Upcoming</div><div class="stat-value">${(db.events||[]).filter(e=>e.studentId===s.id&&e.date>=today()&&!e.logged).length}</div><div class="stat-sub">scheduled sessions</div></div></div></div><div class="tabs" id="dtabs-${s.id}"><div class="tab active" onclick="switchTab('${s.id}','packages',this)">&#128230; Package</div><div class="tab" onclick="switchTab('${s.id}','sessions',this)">&#128221; Sessions</div><div class="tab" onclick="switchTab('${s.id}','profile',this)">&#128100; Profile</div><div class="tab" onclick="switchTab('${s.id}','checklist',this)">&#9989; Onboarding</div><div class="tab" onclick="switchTab('${s.id}','docs',this)">&#128193; Documents</div></div><div id="dt-packages-${s.id}">${pkgHTML}</div><div id="dt-sessions-${s.id}" style="display:none"><div class="card">${sessions.length===0?`<div class="empty"><p>No sessions yet.</p></div>`:`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Hours</th><th>Notes</th><th></th></tr></thead><tbody>${sessions.map(ss=>`<tr><td>${fmt(ss.date)}</td><td><strong>${ss.hours}h</strong></td><td style="color:var(--soft);font-size:13px;max-width:280px">${ss.notes||"--"}</td><td><button class="btn-icon" onclick="delSession('${ss.id}','${s.id}')">&#128465;&#65039;</button></td></tr>`).join("")}</tbody></table></div>`}</div></div><div id="dt-profile-${s.id}" style="display:none"><div class="card">${profHTML}</div></div><div id="dt-checklist-${s.id}" style="display:none"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div><strong>${clP.done}/${clP.total}</strong> items complete</div>${clP.done===clP.total?`<span class="badge b-green">&#127881; Fully onboarded!</span>`:""}</div>${clHTML}</div></div><div id="dt-docs-${s.id}" style="display:none"><div class="card">${docsHTML}</div></div>`;
 }
 
 function switchTab(sid,tab,el){
