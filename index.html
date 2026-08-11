@@ -25,8 +25,8 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
 .nav-tab{padding:22px 18px;font-size:15px;font-weight:600;color:rgba(255,255,255,.65);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;transition:.15s}
 .nav-tab:hover{color:#fff}
 .nav-tab.active{color:#fff;border-bottom-color:#a5b4fc}
-.sync-bar{background:#fff;border-bottom:1px solid var(--border);padding:7px 32px;font-size:13px;color:var(--soft);display:flex;align-items:center;gap:8px}
-.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0}
+
+
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .page{display:none;padding:28px 40px 80px;max-width:1200px;margin:0 auto;width:100%}
 .page.active{display:block}
@@ -152,7 +152,6 @@ tr:hover td{background:#fafafa}
   </div>
   <a href="https://www.checktutors.com" target="_blank" style="padding:8px 14px;border-radius:8px;border:1.5px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);font-size:12px;font-weight:600;color:rgba(255,255,255,.8);cursor:pointer;margin-left:10px;white-space:nowrap;text-decoration:none;transition:.15s" onmouseover="this.style.background='rgba(255,255,255,.16)'" onmouseout="this.style.background='rgba(255,255,255,.08)'">&#8592; Website</a>
 </nav>
-<div class="sync-bar"><div class="sync-dot" id="sdot"></div><span id="slbl">All changes saved</span></div>
 
 <div class="page active" id="page-dashboard">
   <div class="stat-grid" id="d-stats"></div>
@@ -449,7 +448,7 @@ const SEED={
   counters:{student:3,package:4,session:13}
 };
 function loadDB(){try{const r=localStorage.getItem(DBKEY);return r?JSON.parse(r):JSON.parse(JSON.stringify(SEED));}catch(e){return JSON.parse(JSON.stringify(SEED));}}
-function saveDB(){localStorage.setItem(DBKEY,JSON.stringify(db));document.getElementById('sdot').style.background='var(--green)';document.getElementById('slbl').textContent='All changes saved';}
+function saveDB(){localStorage.setItem(DBKEY,JSON.stringify(db));}
 let db=loadDB();
 
 function addDays(d,n){const x=new Date(d+'T00:00:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);}
