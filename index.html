@@ -458,13 +458,13 @@ function fmt(d){if(!d)return"--";const p=d.split("-");return parseInt(p[2])+" "+
 
 function pkgStats(pkg){
   const end=addDays(pkg.start,30);
-  const used=db.sessions.filter(s=>s.studentId===pkg.studentId&&s.date>=pkg.start&&s.date<=end).reduce((t,s)=>t+s.hours,0);
+  const used=db.sessions.filter(s=>s.studentId===pkg.studentId&&s.date>=pkg.start).reduce((t,s)=>t+s.hours,0);
   let roll=0;
   if(pkg.prevId){
     const prev=db.packages.find(p=>p.id===pkg.prevId);
     if(prev&&pkg.start<=addDays(prev.start,30)){
       const pe=addDays(prev.start,30);
-      const pu=db.sessions.filter(s=>s.studentId===pkg.studentId&&s.date>=prev.start&&s.date<=pe).reduce((t,s)=>t+s.hours,0);
+      const pu=db.sessions.filter(s=>s.studentId===pkg.studentId&&s.date>=prev.start&&s.date<pkg.start).reduce((t,s)=>t+s.hours,0);
       roll=Math.min(Math.max(0,prev.size-pu),prev.size*0.5);
     }
   }
@@ -782,7 +782,7 @@ function saveRenewal(){
   const pkgs=db.packages.filter(p=>p.studentId===renewSid).sort((a,b)=>a.start.localeCompare(b.start));
   const last=pkgs[pkgs.length-1],pid="p"+(++db.counters.package);
   db.packages.push({id:pid,studentId:renewSid,size,price:parseFloat(document.getElementById("rn-price").value)||0,start:date,paid:document.getElementById("rn-paid").value,notes:document.getElementById("rn-notes").value.trim(),prevId:last?last.id:null});
-  saveDB();closeModal("m-renew");showDetail(renewSid);showToast("Package renewed!");
+  saveDB();closeModal("m-renew");showDetail(renewSid);renderDash();renderList();showToast("Package renewed!");
 }
 let sessSid=null;
 function openLogSession(sid){
@@ -808,7 +808,8 @@ function saveSession(){
   if(!sid||!date||!hours){showToast("Student, date and hours required");return;}
   db.sessions.push({id:"ss"+(++db.counters.session),studentId:sid,date,hours,notes:document.getElementById("ss-notes").value.trim()});
   saveDB();closeModal("m-session");
-  if(sessSid)showDetail(sessSid);else renderSessions();renderDash();showToast("Session logged!");
+  if(sessSid){showDetail(sessSid);}else{renderSessions();}
+  renderDash();renderList();showToast("Session logged!");
 }
 function renderSessions(){
   const sel=document.getElementById("f-fs"),cur=sel.value;
@@ -1019,7 +1020,7 @@ function saveCalEvent(){
     db.sessions.push({id:"ss"+(++db.counters.session),studentId,date,hours,notes:ev.notes});
     ev.sessionId=db.sessions[db.sessions.length-1].id;
   }
-  saveDB();closeCalModal();renderCalendar();renderDash();showToast(editEventId?"Session updated!":"Session scheduled!");
+  saveDB();closeCalModal();renderCalendar();renderDash();renderList();if(detailSid)showDetail(detailSid);showToast(editEventId?"Session updated!":"Session scheduled!");
 }
 
 function markDone(evId){
@@ -1027,7 +1028,7 @@ function markDone(evId){
   ev.logged=true;
   db.sessions.push({id:"ss"+(++db.counters.session),studentId:ev.studentId,date:ev.date,hours:ev.hours||1,notes:ev.notes});
   ev.sessionId=db.sessions[db.sessions.length-1].id;
-  saveDB();renderCalendar();renderDash();showToast("Session marked as done!");
+  saveDB();renderCalendar();renderDash();renderList();if(detailSid)showDetail(detailSid);showToast("Session marked as done!");
 }
 
 function editEvent(evId){openCalModal(evId,null);}
