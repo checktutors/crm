@@ -474,41 +474,67 @@ function fmt(d){if(!d)return"--";const p=d.split("-");return parseInt(p[2])+" "+
 
 function pkgStats(pkg){
   const end=addDays(pkg.start,30);
-  // All packages for student sorted chronologically
-  const allPkgs=db.packages.filter(p=>p.studentId===pkg.studentId).sort((a,b)=>a.start.localeCompare(b.start));
+  const tod=today();
+
+  // Get all packages for this student sorted chronologically
+  const allPkgs=db.packages.filter(p=>p.studentId===pkg.studentId)
+    .sort((a,b)=>a.start.localeCompare(b.start));
   const pkgIndex=allPkgs.findIndex(p=>p.id===pkg.id);
-  const nextPkg=allPkgs[pkgIndex+1]||null;
-  // This package's session window: start date up to (but not including) next package start
-  const windowEnd=nextPkg?nextPkg.start:"9999-99-99";
-  const used=db.sessions.filter(s=>s.studentId===pkg.studentId&&s.date>=pkg.start&&s.date<windowEnd).reduce((t,s)=>t+s.hours,0);
-  // Rollover from previous package - only unused hours, max 50% of prev package size
-  let roll=0;
-  if(pkg.prevId){
-    const prev=db.packages.find(p=>p.id===pkg.prevId);
-    if(prev){
-      const prevEnd=addDays(prev.start,30);
-      const renewedOnTime=pkg.start<=prevEnd;
-      if(renewedOnTime){
-        const prevIndex=allPkgs.findIndex(p=>p.id===prev.id);
-        const prevNext=allPkgs[prevIndex+1]||null;
-        const prevWindowEnd=prevNext?prevNext.start:"9999-99-99";
-        const prevUsed=db.sessions.filter(s=>s.studentId===pkg.studentId&&s.date>=prev.start&&s.date<prevWindowEnd).reduce((t,s)=>t+s.hours,0);
-        const prevUnused=Math.max(0,prev.size-prevUsed);
-        roll=Math.min(prevUnused,prev.size*0.5);
+
+  // Get all sessions for this student sorted by date
+  const allSessions=db.sessions.filter(s=>s.studentId===pkg.studentId)
+    .sort((a,b)=>a.date.localeCompare(b.date));
+
+  // Assign sessions to packages in order:
+  // First pkg.size hours go to package 1, next pkg.size hours to package 2, etc.
+  let sessionPool=[...allSessions];
+  let hoursUsedPerPkg=[];
+  for(let i=0;i<allPkgs.length;i++){
+    const p=allPkgs[i];
+    let hoursForThisPkg=0;
+    let remaining=[];
+    for(let s of sessionPool){
+      if(hoursForThisPkg<p.size){
+        hoursForThisPkg+=s.hours;
+      } else {
+        remaining.push(s);
       }
     }
+    hoursUsedPerPkg.push(Math.min(hoursForThisPkg,p.size));
+    sessionPool=remaining;
   }
+
+  const used=hoursUsedPerPkg[pkgIndex]||0;
+
+  // Rollover: if this package has a prevId and prev had unused hours
+  let roll=0;
+  if(pkg.prevId&&pkgIndex>0){
+    const prev=allPkgs[pkgIndex-1];
+    const prevUsed=hoursUsedPerPkg[pkgIndex-1]||0;
+    const prevUnused=Math.max(0,prev.size-prevUsed);
+    const prevEnd=addDays(prev.start,30);
+    const renewedOnTime=pkg.start<=prevEnd;
+    if(renewedOnTime&&prevUnused>0){
+      roll=Math.min(prevUnused,prev.size*0.5);
+    }
+  }
+
   const total=pkg.size+roll;
   const remaining=Math.max(0,total-used);
-  const tod=today(),expired=tod>end,renewed=db.packages.some(p=>p.prevId===pkg.id),daysLeft=daysBetween(tod,end);
+  const expired=tod>end;
+  const renewed=db.packages.some(p=>p.prevId===pkg.id);
+  const daysLeft=daysBetween(tod,end);
+
   let action;
   if(pkg.paid==="No")action="Collect payment";
   else if(renewed)action="Renewed";
   else if(expired)action="Send renewal reminder";
   else if(daysLeft<=7&&daysLeft>=0)action="Renewal coming due";
   else action="On track";
+
   return{end,used,roll,total,remaining,expired,renewed,daysLeft,action};
 }
+
 function activePkg(sid){
   const pkgs=db.packages.filter(p=>p.studentId===sid).sort((a,b)=>a.start.localeCompare(b.start));
   return pkgs.slice().reverse().find(p=>{const s=pkgStats(p);return s.action==="On track"||s.action==="Renewal coming due"||s.action==="Collect payment";})||pkgs[pkgs.length-1]||null;
