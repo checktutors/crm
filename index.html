@@ -1818,12 +1818,7 @@ setTimeout(()=>{renderDash();renderList();},300);
 
 // ── CALENDAR FILTER ───────────────────────────────────────────────────────────
 let calFilter="all";
-function setCalFilter(filter,el){
-  calFilter=filter;
-  document.querySelectorAll(".cal-filter").forEach(b=>{b.style.background="";b.style.color="";b.className="btn btn-secondary btn-sm cal-filter";});
-  el.style.background="var(--navy)";el.style.color="#fff";el.className="btn btn-sm cal-filter";
-  renderCalendar();
-}
+
 
 // ── SOCIAL MEDIA ──────────────────────────────────────────────────────────────
 if(!db.socialPosts)db.socialPosts=[];
@@ -1968,16 +1963,7 @@ function saveSocialPlatform(){
   db.socialPlatforms.push({name,handle:document.getElementById("sp-pl-handle").value.trim(),url,color:colors[plat]||"#6B7280",icon:icons[plat]||"&#127760;"});
   saveDB();closeModal("m-social-platform");renderSocialPlatforms();showToast("Platform added!");
 }
-function renderContentPillars(){
-  const el=document.getElementById("content-pillars-list");if(!el)return;
-  if(!db.contentPillars||!db.contentPillars.length){el.innerHTML=`<div style="font-size:13px;color:var(--soft)">No content pillars yet.</div>`;return;}
-  el.innerHTML=db.contentPillars.map((p,i)=>`<div style="background:${p.bg};border-radius:12px;padding:14px;text-align:center;border-left:4px solid ${p.color};position:relative">
-    <button onclick="deleteContentPillar(${i})" style="position:absolute;top:5px;right:5px;background:none;border:none;cursor:pointer;font-size:12px;color:${p.color};opacity:.6">&#10005;</button>
-    <div style="font-size:22px">${p.emoji}</div>
-    <div style="font-weight:700;font-size:12px;color:${p.color};margin-top:5px">${p.title}</div>
-    <div style="font-size:11px;color:var(--soft);margin-top:3px">${p.desc}</div>
-  </div>`).join("");
-}
+
 function deleteContentPillar(idx){if(!confirm("Remove this pillar?"))return;db.contentPillars.splice(idx,1);saveDB();renderContentPillars();}
 function openAddPillar(){
   const emoji=prompt("Emoji for this pillar (e.g. 📚):");if(!emoji)return;
@@ -2237,7 +2223,7 @@ function deleteDriveLink(idx){if(!confirm("Remove this link?"))return;db.driveLi
 // ── SOCIAL PLATFORM ICONS ────────────────────────────────────────────────────
 function getSocialIcon(iconKey, color){
   const icons = {
-    ig: `<svg width="28" height="28" viewBox="0 0 24 24"><defs><radialGradient id="ig1" cx="30%" cy="107%"><stop offset="0%" stop-color="#fdf497"/><stop offset="45%" stop-color="#fd5949"/><stop offset="60%" stop-color="#d6249f"/><stop offset="90%" stop-color="#285AEB"/></radialGradient></defs><rect width="24" height="24" rx="6" fill="url(#ig1)"/><path d="M12 7.2A4.8 4.8 0 1 0 12 16.8 4.8 4.8 0 0 0 12 7.2zm0 7.9A3.1 3.1 0 1 1 12 8.9a3.1 3.1 0 0 1 0 6.2z" fill="#fff"/><circle cx="17" cy="7" r="1.1" fill="#fff"/></svg>`,
+    ig: `<svg width="28" height="28" viewBox="0 0 24 24"><defs><radialGradient id="ig_grad" cx="30%" cy="107%"><stop offset="0%" stop-color="#fdf497"/><stop offset="45%" stop-color="#fd5949"/><stop offset="60%" stop-color="#d6249f"/><stop offset="90%" stop-color="#285AEB"/></radialGradient></defs><rect width="24" height="24" rx="6" fill="url(#ig_grad)"/><path d="M12 7.2A4.8 4.8 0 1 0 12 16.8 4.8 4.8 0 0 0 12 7.2zm0 7.9A3.1 3.1 0 1 1 12 8.9a3.1 3.1 0 0 1 0 6.2z" fill="#fff"/><circle cx="17" cy="7" r="1.1" fill="#fff"/></svg>`,
     fb: `<svg width="28" height="28" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#1877F2"/><path d="M16 8h-2a1 1 0 0 0-1 1v2h3l-.5 3H13v7h-3v-7H8v-3h2V9a4 4 0 0 1 4-4h2v3z" fill="#fff"/></svg>`,
     tt: `<svg width="28" height="28" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#010101"/><path d="M19 9a4 4 0 0 1-4-4h-3v10.5a2 2 0 1 1-2-2 2 2 0 0 1 .5.07V10.5a5 5 0 1 0 5 5V11a7 7 0 0 0 4 1.3V9.3A4 4 0 0 1 19 9z" fill="#fff"/></svg>`,
     li: `<svg width="28" height="28" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#0A66C2"/><path d="M7 10h2v7H7zm1-3a1.1 1.1 0 1 1 0 2.2A1.1 1.1 0 0 1 8 7zm4 3h2v1a3 3 0 0 1 5 2v4h-2v-3.5a1.5 1.5 0 0 0-3 0V17h-2v-7z" fill="#fff"/></svg>`,
@@ -2504,6 +2490,160 @@ setBizTab=function(tab,el){
   if(tab==="drive")renderDriveLinks();
 };
 
+
+
+// ── GOALS SECTION TITLE EDITABLE ─────────────────────────────────────────────
+if(!db.goalsTitle) db.goalsTitle = "September Push Goals";
+if(!db.milestones) db.milestones = [
+  {id:1, text:"First student signed up", done:true},
+  {id:2, text:"Reached 3 active students", done:false},
+  {id:3, text:"Set up Google Business Profile", done:false},
+  {id:4, text:"First referral student", done:false},
+  {id:5, text:"Reached 5 students", done:false},
+  {id:6, text:"Reached 10 students - GOAL!", done:false},
+];
+
+function editGoalsTitle(){
+  const val = prompt("Goals section title:", db.goalsTitle||"September Push Goals");
+  if(!val||!val.trim()) return;
+  db.goalsTitle = val.trim();
+  saveDB();
+  const el = document.getElementById("goals-section-title");
+  if(el) el.textContent = db.goalsTitle;
+  showToast("Title updated!");
+}
+
+function renderMilestones(){
+  const el = document.getElementById("biz-milestones");if(!el)return;
+  const milestones = db.milestones||[];
+  el.innerHTML = milestones.map((m,i)=>`
+    <div style="display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid #f3f4f6">
+      <input type="checkbox" ${m.done?"checked":""} onchange="toggleMilestone(${i},this)"
+        style="width:17px;height:17px;accent-color:var(--navy);flex-shrink:0;cursor:pointer"/>
+      <span style="flex:1;font-size:14px;${m.done?"text-decoration:line-through;color:var(--soft)":""}">${m.text}</span>
+      <button class="btn-icon" onclick="editMilestone(${i})" title="Edit">✎</button>
+      <button class="btn-icon" onclick="deleteMilestone(${i})" title="Delete">🗑️</button>
+    </div>`).join("") +
+    `<button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="addMilestone()">+ Add Milestone</button>`;
+}
+function toggleMilestone(i,cb){
+  if(db.milestones&&db.milestones[i]) db.milestones[i].done=cb.checked;
+  saveDB();renderMilestones();
+}
+function editMilestone(i){
+  const m=(db.milestones||[])[i];if(!m)return;
+  const val=prompt("Edit milestone:",m.text);if(!val||!val.trim())return;
+  db.milestones[i].text=val.trim();saveDB();renderMilestones();showToast("Milestone updated!");
+}
+function deleteMilestone(i){
+  if(!confirm("Delete this milestone?"))return;
+  db.milestones.splice(i,1);saveDB();renderMilestones();showToast("Deleted!");
+}
+function addMilestone(){
+  const val=prompt("New milestone:");if(!val||!val.trim())return;
+  if(!db.milestones)db.milestones=[];
+  db.milestones.push({id:Date.now(),text:val.trim(),done:false});
+  saveDB();renderMilestones();showToast("Milestone added!");
+}
+
+// ── PATCH renderBizGoals TO USE NEW ELEMENTS ─────────────────────────────────
+const __origRenderBizGoals = renderBizGoals;
+renderBizGoals = function(){
+  __origRenderBizGoals();
+  // Update goals title
+  const titleEl=document.getElementById("goals-section-title");
+  if(titleEl) titleEl.textContent=db.goalsTitle||"September Push Goals";
+  renderMilestones();
+};
+
+// ── PILLAR INLINE EDITING ─────────────────────────────────────────────────────
+function editPillarTitle(idx){
+  const p=(db.contentPillars||[])[idx];if(!p)return;
+  const val=prompt("Edit pillar name:",p.title);if(!val||!val.trim())return;
+  p.title=val.trim();saveDB();renderContentPillars();showToast("Updated!");
+}
+function editPillarDesc(idx){
+  const p=(db.contentPillars||[])[idx];if(!p)return;
+  const val=prompt("Edit description:",p.desc);if(val===null)return;
+  p.desc=val.trim();saveDB();renderContentPillars();showToast("Updated!");
+}
+function editPillarEmoji(idx){
+  const p=(db.contentPillars||[])[idx];if(!p)return;
+  const val=prompt("Change emoji:",p.emoji);if(!val||!val.trim())return;
+  p.emoji=val.trim();saveDB();renderContentPillars();showToast("Updated!");
+}
+
+// ── OVERRIDE renderContentPillars WITH EDITABLE VERSION ──────────────────────
+renderContentPillars = function(){
+  const el=document.getElementById("content-pillars-grid");if(!el)return;
+  if(!db.contentPillars||!db.contentPillars.length){
+    el.innerHTML=`<div style="font-size:13px;color:var(--soft)">No pillars yet. Click + Add Pillar.</div>`;return;
+  }
+  el.innerHTML=db.contentPillars.map((p,i)=>`
+    <div style="background:${p.bg};border-radius:12px;padding:14px;text-align:center;border-left:4px solid ${p.color};position:relative">
+      <div style="font-size:22px;cursor:pointer" onclick="editPillarEmoji(${i})" title="Click to change emoji">${p.emoji}</div>
+      <div style="font-weight:700;font-size:13px;color:${p.color};margin-top:5px;cursor:pointer" onclick="editPillarTitle(${i})" title="Click to edit">${p.title} ✎</div>
+      <div style="font-size:11px;color:var(--soft);margin-top:3px;cursor:pointer" onclick="editPillarDesc(${i})">${p.desc} ✎</div>
+      <button onclick="deletePillar(${i})" style="position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;font-size:12px;opacity:.6;color:var(--text)" title="Remove">✕</button>
+    </div>`).join("");
+};
+
+// ── DOCUMENT TEMPLATES: ADD DROP ZONE ────────────────────────────────────────
+function renderDocTemplatesWithDrop(){
+  renderDocTemplates();
+  // Add drag-and-drop zone after the list
+  const el=document.getElementById("doc-templates-list");if(!el)return;
+  const dropZone=document.createElement("div");
+  dropZone.id="doc-drop-zone";
+  dropZone.style.cssText="border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;font-size:13px;color:var(--soft);margin-top:10px;transition:.15s";
+  dropZone.innerHTML="&#128206; Drag & drop files here to upload";
+  dropZone.addEventListener("dragover",e=>{e.preventDefault();dropZone.style.borderColor="var(--navy)";dropZone.style.color="var(--navy)";dropZone.style.background="var(--navy-light)";});
+  dropZone.addEventListener("dragleave",()=>{dropZone.style.borderColor="";dropZone.style.color="";dropZone.style.background="";});
+  dropZone.addEventListener("drop",e=>{
+    e.preventDefault();
+    dropZone.style.borderColor="";dropZone.style.color="";dropZone.style.background="";
+    const files=e.dataTransfer.files;
+    Array.from(files).forEach(file=>{
+      const input={files:[file]};
+      uploadDocTemplate(input);
+    });
+  });
+  dropZone.addEventListener("click",()=>{
+    const inp=document.createElement("input");inp.type="file";inp.multiple=true;
+    inp.onchange=e=>Array.from(e.target.files).forEach(file=>uploadDocTemplate({files:[file]}));
+    inp.click();
+  });
+  el.parentNode.insertBefore(dropZone,el.nextSibling);
+}
+
+// Override renderDocTemplates to include drop zone
+const __origRenderDocTemplates = renderDocTemplates;
+renderDocTemplates = function(){
+  __origRenderDocTemplates();
+  // Add drop zone if not already there
+  setTimeout(()=>{
+    if(document.getElementById("doc-drop-zone"))return;
+    const el=document.getElementById("doc-templates-list");if(!el)return;
+    const dropZone=document.createElement("div");
+    dropZone.id="doc-drop-zone";
+    dropZone.style.cssText="border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;font-size:13px;color:var(--soft);margin-top:10px;transition:.15s";
+    dropZone.innerHTML="📂 Drag & drop files here to upload, or click to browse";
+    dropZone.addEventListener("dragover",e=>{e.preventDefault();dropZone.style.borderColor="var(--navy)";dropZone.style.color="var(--navy)";dropZone.style.background="var(--navy-light)";});
+    dropZone.addEventListener("dragleave",()=>{dropZone.style.borderColor="";dropZone.style.color="";dropZone.style.background="";});
+    dropZone.addEventListener("drop",e=>{
+      e.preventDefault();
+      dropZone.style.borderColor="";dropZone.style.color="";dropZone.style.background="";
+      Array.from(e.dataTransfer.files).forEach(file=>uploadDocTemplate({files:[file]}));
+    });
+    dropZone.addEventListener("click",()=>{
+      const inp=document.createElement("input");inp.type="file";inp.multiple=true;
+      inp.onchange=e=>Array.from(e.target.files).forEach(file=>uploadDocTemplate({files:[file]}));
+      inp.click();
+    });
+    if(el.nextSibling&&el.nextSibling.id==="doc-drop-zone")return;
+    el.parentNode.insertBefore(dropZone,el.nextSibling);
+  },50);
+};
 </script>
 
 <!-- Social Media Page -->
@@ -2638,13 +2778,15 @@ setBizTab=function(tab,el){
       </div>
     </div>
     <div class="card">
-      <div class="card-title">&#127919; September Push Goals</div>
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span id="goals-section-title" style="cursor:pointer" onclick="editGoalsTitle()" title="Click to rename">September Push Goals ✎</span>
+      </div>
       <div id="biz-goals-list"></div>
       <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="addBizGoal()">+ Add Goal</button>
     </div>
     <div class="card">
       <div class="card-title">&#128640; Business Milestones</div>
-      <div style="display:flex;flex-direction:column;gap:10px" id="biz-milestones"></div>
+      <div id="biz-milestones"></div>
     </div>
   </div>
 
