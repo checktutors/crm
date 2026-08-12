@@ -2328,6 +2328,7 @@ function getSocialIcon(iconKey, color){
     fb: `<svg width="28" height="28" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#1877F2"/><path d="M16 8h-2a1 1 0 0 0-1 1v2h3l-.5 3H13v7h-3v-7H8v-3h2V9a4 4 0 0 1 4-4h2v3z" fill="#fff"/></svg>`,
     tt: `<svg width="28" height="28" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#010101"/><path d="M19 9a4 4 0 0 1-4-4h-3v10.5a2 2 0 1 1-2-2 2 2 0 0 1 .5.07V10.5a5 5 0 1 0 5 5V11a7 7 0 0 0 4 1.3V9.3A4 4 0 0 1 19 9z" fill="#fff"/></svg>`,
     li: `<svg width="28" height="28" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#0A66C2"/><path d="M7 10h2v7H7zm1-3a1.1 1.1 0 1 1 0 2.2A1.1 1.1 0 0 1 8 7zm4 3h2v1a3 3 0 0 1 5 2v4h-2v-3.5a1.5 1.5 0 0 0-3 0V17h-2v-7z" fill="#fff"/></svg>`,
+    canva: `<div style="width:28px;height:28px;border-radius:7px;background:#00C4CC;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#00C4CC"/><path d="M15.5 8.5C14.7 7.2 13.4 6.5 12 6.5c-3 0-5.5 2.5-5.5 5.5s2.5 5.5 5.5 5.5c1.4 0 2.7-.5 3.6-1.4" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><circle cx="15.5" cy="12" r="2" fill="#fff"/></svg></div>`,
   };
   return icons[iconKey] || `<div style="width:28px;height:28px;border-radius:6px;background:${color||"#666"};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px">${iconKey?iconKey[0].toUpperCase():"?"}</div>`;
 }
@@ -2338,6 +2339,7 @@ if(!db.socialLinks) db.socialLinks=[
   {platform:"Facebook",url:"",icon:"fb",color:"#1877F2"},
   {platform:"TikTok",url:"",icon:"tt",color:"#010101"},
   {platform:"LinkedIn",url:"",icon:"li",color:"#0A66C2"},
+  {platform:"Canva",url:"https://www.canva.com",icon:"canva",color:"#00C4CC"},
 ];
 if(!db.contentPillars) db.contentPillars=[
   {emoji:"📍",title:"Ottawa Study Spots",desc:"Save-worthy content",color:"#0891B2",bg:"#e0f2fe"},
@@ -2591,6 +2593,7 @@ const _origRenderBusinessPage=renderBusinessPage;
 renderBusinessPage=function(){
   _origRenderBusinessPage();
   renderBizGoalsTargets();
+  renderBrandColors();
 };
 
 // ── PATCH setBizTab TO RENDER DOC TEMPLATES ───────────────────────────────────
@@ -2599,6 +2602,7 @@ setBizTab=function(tab,el){
   _origSetBizTab(tab,el);
   if(tab==="goals"){renderBizGoals();renderBizGoalsTargets();}
   if(tab==="admin"){renderEmailTemplates();renderDocTemplates();}
+  if(tab==="logos")renderLogos();
   if(tab==="drive")renderDriveLinks();
 };
 
@@ -2813,13 +2817,105 @@ closeModal=function(id){
     if(inp)inp.value="";
   }
 };
+
+// ── LOGOS & BRAND ─────────────────────────────────────────────────────────────
+if(!db.logos) db.logos=[];
+if(!db.brandColors) db.brandColors=[];
+
+function handleLogoDrop(e){
+  e.preventDefault();
+  const zone=document.getElementById("logo-drop-zone");
+  if(zone){zone.style.borderColor="";zone.style.background="";zone.style.color="";}
+  Array.from(e.dataTransfer.files).forEach(uploadLogo);
+}
+function handleLogoFileSelect(input){
+  Array.from(input.files).forEach(uploadLogo);
+  input.value="";
+}
+function uploadLogo(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    if(!db.logos)db.logos=[];
+    db.logos.push({
+      id:"logo"+Date.now()+Math.random(),
+      name:file.name,
+      size:fmtBytes(file.size),
+      date:fmt(today()),
+      data:e.target.result,
+      type:file.type,
+    });
+    saveDB();renderLogos();showToast(file.name+" uploaded!");
+  };
+  reader.readAsDataURL(file);
+}
+function renderLogos(){
+  const grid=document.getElementById("logos-grid");if(!grid)return;
+  if(!db.logos||!db.logos.length){
+    grid.innerHTML=`<div style="font-size:13px;color:var(--soft);grid-column:1/-1;padding:8px 0">No logos yet. Upload your first one below!</div>`;
+    return;
+  }
+  grid.innerHTML=db.logos.map((l,i)=>{
+    const isImg=l.type&&l.type.startsWith("image/");
+    return `<div style="background:#f9fafb;border-radius:12px;border:1.5px solid var(--border);overflow:hidden;position:relative;group">
+      <div style="height:120px;display:flex;align-items:center;justify-content:center;background:#fff;border-bottom:1px solid var(--border);padding:12px">
+        ${isImg
+          ?`<img src="${l.data}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:4px"/>`
+          :`<div style="font-size:40px">&#128196;</div>`}
+      </div>
+      <div style="padding:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${l.name}">${l.name}</div>
+        <div style="font-size:10px;color:var(--soft);margin-top:2px">${l.size} - ${l.date}</div>
+        <div style="display:flex;gap:5px;margin-top:8px">
+          <button class="btn btn-primary btn-sm" onclick="downloadLogo(${i})" style="flex:1;font-size:11px">&#11015; Download</button>
+          <button class="btn-icon" onclick="deleteLogo(${i})" title="Delete" style="color:var(--red)">&#128465;</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+function downloadLogo(idx){
+  const l=(db.logos||[])[idx];if(!l)return;
+  const a=document.createElement("a");a.href=l.data;a.download=l.name;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  showToast(l.name+" downloaded!");
+}
+function deleteLogo(idx){
+  if(!confirm("Delete this logo?"))return;
+  db.logos.splice(idx,1);saveDB();renderLogos();showToast("Deleted!");
+}
+function addBrandColor(){
+  const hex=prompt("Enter hex color code (e.g. #FF6B6B):");
+  if(!hex||!hex.trim())return;
+  const name=prompt("Color name (e.g. Coral):")||hex;
+  if(!db.brandColors)db.brandColors=[];
+  db.brandColors.push({hex:hex.trim(),name:name.trim()});
+  saveDB();renderBrandColors();showToast("Color added!");
+}
+function renderBrandColors(){
+  const el=document.getElementById("custom-brand-colors");if(!el)return;
+  el.innerHTML=(db.brandColors||[]).map((c,i)=>`
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="width:36px;height:36px;border-radius:8px;background:${c.hex};box-shadow:0 2px 8px rgba(0,0,0,.12);cursor:pointer" onclick="deleteBrandColor(${i})" title="Click to remove"></div>
+      <div><div style="font-weight:600;font-size:13px">${c.name}</div><div style="font-size:11px;color:var(--soft)">${c.hex}</div></div>
+    </div>`).join("");
+}
+function deleteBrandColor(idx){
+  if(!confirm("Remove this color?"))return;
+  db.brandColors.splice(idx,1);saveDB();renderBrandColors();
+}
 </script>
 
 <!-- Social Media Page -->
 <div class="page" id="page-social">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
     <h2 style="font-size:22px;font-weight:800;color:var(--navy)">&#128247; Social Media</h2>
-    <button class="btn btn-primary" onclick="openModal('m-social-post')">+ New Post</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <a href="https://www.canva.com/create/social-media/" target="_blank" style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-radius:10px;background:#00C4CC;color:#fff;font-weight:700;font-size:14px;text-decoration:none;transition:.15s;border:none;cursor:pointer" onmouseover="this.style.background='#00a8b5'" onmouseout="this.style.background='#00C4CC'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.3)"/><path d="M15.5 8.5C14.7 7.2 13.4 6.5 12 6.5c-3 0-5.5 2.5-5.5 5.5s2.5 5.5 5.5 5.5c1.4 0 2.7-.5 3.6-1.4" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><circle cx="15.5" cy="12" r="2" fill="#fff"/></svg>
+        Design on Canva
+      </a>
+      <button class="btn btn-primary" onclick="openSocialPost('scheduled')">+ New Post</button>
+    </div>
   </div>
 
   <!-- Social Calendar -->
@@ -2890,6 +2986,7 @@ closeModal=function(id){
     <div class="stab active" onclick="setBizTab('profile',this)">&#128100; My Profile</div>
     <div class="stab" onclick="setBizTab('goals',this)">&#127919; Goals</div>
     <div class="stab" onclick="setBizTab('admin',this)">&#128203; Admin & Templates</div>
+    <div class="stab" onclick="setBizTab('logos',this)">&#127912; Logos & Brand</div>
     <div class="stab" onclick="setBizTab('drive',this)">&#128190; Drive & Files</div>
   </div>
 
@@ -2985,6 +3082,45 @@ closeModal=function(id){
         <a href="https://docs.google.com/forms" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#128203; Intake Form</a>
         <a href="https://business.facebook.com" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#128200; Meta Business Suite</a>
         <a href="https://checktutors.com" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#127760; Website</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logos & Brand Tab -->
+  <div id="biz-logos" style="display:none">
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        &#127912; Logos & Brand Assets
+        <span style="font-size:12px;color:var(--soft);font-weight:400">Click or drag to upload</span>
+      </div>
+      <div id="logos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:16px"></div>
+      <div id="logo-drop-zone" style="border:2px dashed var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;font-size:14px;color:var(--soft);transition:.15s"
+        ondragover="event.preventDefault();this.style.borderColor='var(--navy)';this.style.background='var(--navy-light)';this.style.color='var(--navy)'"
+        ondragleave="this.style.borderColor='';this.style.background='';this.style.color=''"
+        ondrop="handleLogoDrop(event)"
+        onclick="document.getElementById('logo-file-input').click()">
+        &#127912; Drag & drop logos, icons, or brand assets here<br/>
+        <span style="font-size:12px;opacity:.7">PNG, JPG, SVG, PDF supported</span>
+        <input type="file" id="logo-file-input" style="display:none" multiple accept="image/*,.svg,.pdf" onchange="handleLogoFileSelect(this)"/>
+      </div>
+    </div>
+    <div class="card" style="margin-top:0">
+      <div class="card-title">&#127775; Brand Colors</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:36px;height:36px;border-radius:8px;background:#2D3270;box-shadow:0 2px 8px rgba(0,0,0,.15)"></div>
+          <div><div style="font-weight:600;font-size:13px">Navy</div><div style="font-size:11px;color:var(--soft)">#2D3270</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:36px;height:36px;border-radius:8px;background:#a5b4fc;box-shadow:0 2px 8px rgba(0,0,0,.1)"></div>
+          <div><div style="font-weight:600;font-size:13px">Lavender</div><div style="font-size:11px;color:var(--soft)">#a5b4fc</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:36px;height:36px;border-radius:8px;background:#ffffff;border:1.5px solid #eee;box-shadow:0 2px 8px rgba(0,0,0,.07)"></div>
+          <div><div style="font-weight:600;font-size:13px">White</div><div style="font-size:11px;color:var(--soft)">#FFFFFF</div></div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="addBrandColor()" style="margin-left:8px">+ Add Color</button>
+        <div id="custom-brand-colors" style="display:flex;gap:12px;flex-wrap:wrap"></div>
       </div>
     </div>
   </div>
