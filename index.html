@@ -768,7 +768,23 @@ tr:hover td{background:#fafafa}
     <div class="field"><label>Initial Contact Date</label><input id="ld-date" type="date"/></div>
     <div class="field"><label>Follow-up Date</label><input id="ld-followup-date" type="date"/></div>
   </div>
+  <input type="hidden" id="ld-current-id"/>
+  <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+    <div style="font-size:12px;font-weight:700;color:var(--soft);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">&#128206; Intake Form / Documents</div>
+    <div id="ld-doc-drop"
+      style="border:2px dashed var(--border);border-radius:10px;padding:18px;text-align:center;cursor:pointer;font-size:13px;color:var(--soft);transition:.2s"
+      ondragover="event.preventDefault();this.style.borderColor='var(--navy)';this.style.background='var(--navy-light)';this.style.color='var(--navy)'"
+      ondragleave="this.style.borderColor='';this.style.background='';this.style.color=''"
+      ondrop="handleLeadDocDrop(event)"
+      onclick="document.getElementById('ld-file-input').click()">
+      &#128193; Drag &amp; drop intake form or any files here<br/>
+      <span style="font-size:11px;opacity:.7">or click to browse &mdash; PDF, Word, images all supported</span>
+      <input type="file" id="ld-file-input" style="display:none" multiple onchange="handleLeadDocSelect(this)"/>
+    </div>
+    <div id="ld-docs-preview" style="margin-top:8px"></div>
+  </div>
   <div class="modal-ft">
+    <button class="btn btn-danger" id="btn-delete-lead" style="display:none;margin-right:auto" onclick="deleteCurrentLead()">Delete Lead</button>
     <button class="btn btn-secondary" onclick="closeModal('m-lead')">Cancel</button>
     <button class="btn btn-primary" onclick="saveLead()">Save Lead</button>
   </div>
@@ -1830,11 +1846,26 @@ function renderLeads(){
           <button class="btn btn-danger btn-sm" onclick="deleteLead('${l.id}')">Delete</button>
         </div>
       </div>
+      ${(l.docs&&l.docs.length)?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f3f4f6">
+        <div style="font-size:11px;font-weight:700;color:var(--soft);margin-bottom:6px">&#128206; Documents (${l.docs.length})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${l.docs.map((d,di)=>`
+          <div style="display:flex;align-items:center;gap:6px;background:var(--navy-light);border-radius:7px;padding:5px 9px;border:1px solid var(--navy-mid)">
+            <span style="font-size:14px">&#128196;</span>
+            <span style="font-size:11px;font-weight:600;color:var(--navy);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.name}</span>
+            <button onclick="downloadLeadDoc('${l.id}',${di})" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--navy)" title="Download">&#11015;</button>
+            <button onclick="deleteLeadDoc('${l.id}',${di})" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--red)" title="Remove">&#10005;</button>
+          </div>`).join("")}
+        </div>
+      </div>`:""}
     </div>`;
   }).join("");
 }
 function openAddLead(){
   editLeadId=null;
+  pendingLeadDocs=[];
+  const currentIdEl=document.getElementById("ld-current-id");if(currentIdEl)currentIdEl.value="";
+  const previewEl=document.getElementById("ld-docs-preview");if(previewEl)previewEl.innerHTML="";
+  const delBtn=document.getElementById("btn-delete-lead");if(delBtn)delBtn.style.display="none";
   const fields=["ld-name","ld-email","ld-phone","ld-student","ld-grade","ld-meetlink","ld-notes","ld-followup-date"];
   fields.forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   document.getElementById("ld-date").value=today();
@@ -1852,10 +1883,16 @@ function openEditLead(id){
   document.getElementById("ld-meet-sent").checked=!!l.meetSent;document.getElementById("ld-consult-done").checked=!!l.consultDone;
   document.getElementById("ld-follow-up").checked=!!l.followUp;document.getElementById("ld-proposal-sent").checked=!!l.proposalSent;
   openModal("m-lead");
+  setTimeout(()=>{
+    renderLeadDocsInModal(id);
+    const delBtn=document.getElementById("btn-delete-lead");
+    if(delBtn)delBtn.style.display="block";
+  },50);
 }
 function saveLead(){
   const name=document.getElementById("ld-name").value.trim();if(!name){showToast("Name is required");return;}
-  const lead={id:editLeadId||("ld"+(db.leadCounter++)),name,email:document.getElementById("ld-email").value.trim(),phone:document.getElementById("ld-phone").value.trim(),studentName:document.getElementById("ld-student").value.trim(),grade:document.getElementById("ld-grade").value.trim(),status:document.getElementById("ld-status").value,source:document.getElementById("ld-source").value,meetLink:document.getElementById("ld-meetlink").value.trim(),notes:document.getElementById("ld-notes").value.trim(),date:document.getElementById("ld-date").value||today(),followupDate:document.getElementById("ld-followup-date").value,formFilled:document.getElementById("ld-form-filled").checked,emailSent:document.getElementById("ld-email-sent").checked,meetSent:document.getElementById("ld-meet-sent").checked,consultDone:document.getElementById("ld-consult-done").checked,followUp:document.getElementById("ld-follow-up").checked,proposalSent:document.getElementById("ld-proposal-sent").checked};
+  const existingDocs=editLeadId?(db.leads.find(l=>l.id===editLeadId)||{}).docs||[]:[];
+  const lead={id:editLeadId||("ld"+(db.leadCounter++)),name,docs:existingDocs,email:document.getElementById("ld-email").value.trim(),phone:document.getElementById("ld-phone").value.trim(),studentName:document.getElementById("ld-student").value.trim(),grade:document.getElementById("ld-grade").value.trim(),status:document.getElementById("ld-status").value,source:document.getElementById("ld-source").value,meetLink:document.getElementById("ld-meetlink").value.trim(),notes:document.getElementById("ld-notes").value.trim(),date:document.getElementById("ld-date").value||today(),followupDate:document.getElementById("ld-followup-date").value,formFilled:document.getElementById("ld-form-filled").checked,emailSent:document.getElementById("ld-email-sent").checked,meetSent:document.getElementById("ld-meet-sent").checked,consultDone:document.getElementById("ld-consult-done").checked,followUp:document.getElementById("ld-follow-up").checked,proposalSent:document.getElementById("ld-proposal-sent").checked};
   if(editLeadId){const idx=db.leads.findIndex(l=>l.id===editLeadId);if(idx>=0)db.leads[idx]=lead;else db.leads.push(lead);}
   else db.leads.push(lead);
   saveDB();closeModal("m-lead");renderLeads();showToast(editLeadId?"Lead updated!":"Lead added!");editLeadId=null;
@@ -2940,6 +2977,107 @@ function editCanvaLink(){
 (function(){
   if(db.canvaUrl){const btn=document.getElementById("canva-design-btn");if(btn)btn.href=db.canvaUrl;}
 })();
+
+// ── LEAD DOCUMENT FUNCTIONS ───────────────────────────────────────────────────
+let pendingLeadDocs = [];
+
+function handleLeadDocDrop(e){
+  e.preventDefault();
+  const zone = document.getElementById("ld-doc-drop");
+  if(zone){zone.style.borderColor="";zone.style.background="";zone.style.color="";}
+  const leadId = document.getElementById("ld-current-id").value;
+  Array.from(e.dataTransfer.files).forEach(f=>{
+    if(leadId) uploadLeadDoc(leadId, f);
+    else pendingLeadDocs.push(f);
+  });
+  if(leadId) renderLeadDocsInModal(leadId);
+  else renderPendingLeadDocs();
+}
+
+function handleLeadDocSelect(input){
+  const leadId = document.getElementById("ld-current-id").value;
+  Array.from(input.files).forEach(f=>{
+    if(leadId) uploadLeadDoc(leadId, f);
+    else pendingLeadDocs.push(f);
+  });
+  if(leadId) renderLeadDocsInModal(leadId);
+  else renderPendingLeadDocs();
+  input.value = "";
+}
+
+function uploadLeadDoc(leadId, file){
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lead = db.leads.find(l => l.id === leadId);
+    if(!lead) return;
+    if(!lead.docs) lead.docs = [];
+    lead.docs.push({
+      id: "ldoc" + Date.now() + Math.random(),
+      name: file.name,
+      size: fmtBytes(file.size),
+      date: fmt(today()),
+      data: e.target.result
+    });
+    saveDB();
+    renderLeadDocsInModal(leadId);
+    renderLeads();
+    showToast(file.name + " attached!");
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderPendingLeadDocs(){
+  const el = document.getElementById("ld-docs-preview");
+  if(!el) return;
+  if(!pendingLeadDocs.length){el.innerHTML="";return;}
+  el.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--soft);margin-bottom:6px">Files to attach on save:</div>` +
+    pendingLeadDocs.map((f,i) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--navy-light);border-radius:8px;margin-bottom:4px;border:1px solid var(--navy-mid)">
+      <span style="font-size:16px">📄</span>
+      <span style="flex:1;font-size:12px;font-weight:600;color:var(--navy)">${f.name}</span>
+      <button onclick="pendingLeadDocs.splice(${i},1);renderPendingLeadDocs()" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px">✕</button>
+    </div>`).join("");
+}
+
+function renderLeadDocsInModal(leadId){
+  const el = document.getElementById("ld-docs-preview");
+  if(!el) return;
+  const lead = db.leads.find(l => l.id === leadId);
+  const docs = lead ? (lead.docs || []) : [];
+  if(!docs.length){el.innerHTML="";return;}
+  el.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--soft);margin-bottom:6px">Attached (${docs.length} file${docs.length>1?"s":""}):</div>` +
+    docs.map((d,i) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--green-light);border-radius:8px;margin-bottom:4px;border:1px solid #bbf7d0">
+      <span style="font-size:16px">📄</span>
+      <span style="flex:1;font-size:12px;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.name}</span>
+      <button onclick="downloadLeadDoc('${leadId}',${i})" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--navy)" title="Download">⬇</button>
+      <button onclick="deleteLeadDoc('${leadId}',${i});renderLeadDocsInModal('${leadId}')" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--red)" title="Remove">✕</button>
+    </div>`).join("");
+}
+
+function downloadLeadDoc(leadId, idx){
+  const lead = db.leads.find(l => l.id === leadId);
+  if(!lead) return;
+  const doc = (lead.docs || [])[idx];
+  if(!doc) return;
+  const a = document.createElement("a");
+  a.href = doc.data; a.download = doc.name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function deleteLeadDoc(leadId, idx){
+  if(!confirm("Remove this document?")) return;
+  const lead = db.leads.find(l => l.id === leadId);
+  if(!lead) return;
+  lead.docs.splice(idx, 1);
+  saveDB(); renderLeads(); showToast("Removed!");
+}
+
+function deleteCurrentLead(){
+  if(!editLeadId) return;
+  if(!confirm("Delete this lead?")) return;
+  db.leads = db.leads.filter(l => l.id !== editLeadId);
+  editLeadId = null;
+  saveDB(); closeModal("m-lead"); renderLeads(); showToast("Lead deleted!");
+}
 </script>
 
 <!-- Social Media Page -->
