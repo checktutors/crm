@@ -136,6 +136,8 @@ tr:hover td{background:#fafafa}
 .cal-event{background:var(--navy);color:#fff;border-radius:4px;padding:2px 6px;font-size:11px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .cal-event.done{background:var(--green);opacity:.8}
 .cal-event.has-meet{border-left:3px solid #4CAF50}
+.cal-event.consultation{background:#7C3AED}
+.cal-event.consultation.done{background:#5b21b6}
 @media(max-width:700px){.cal-cell{min-height:60px;padding:3px}.cal-event{display:none}.cal-day-num{font-size:12px}}
 @media(max-width:700px){.form-grid{grid-template-columns:1fr}.stat-grid{grid-template-columns:1fr 1fr}.detail-acts{margin-left:0;width:100%}.dash-cols{grid-template-columns:1fr}.page{padding:16px 14px 80px}.nav{padding:0 14px}}
 </style>
@@ -388,7 +390,8 @@ tr:hover td{background:#fafafa}
       <span id="cal-month-label" style="font-size:16px;font-weight:700;color:var(--navy);min-width:160px;text-align:center"></span>
       <button class="btn btn-secondary btn-sm" onclick="calNext()">&#8594;</button>
       <button class="btn btn-secondary btn-sm" onclick="goToday()">Today</button>
-      <button class="btn btn-primary" onclick="openModal('m-cal-event')">+ Add Session</button>
+      <button class="btn btn-primary" onclick="openCalModal(null,null)">+ Add Session</button>
+      <button class="btn" style="background:#7C3AED;color:#fff" onclick="openConsultModal(null,null)">+ Free Consultation</button>
     </div>
   </div>
   <div class="card" style="padding:0;overflow:hidden">
@@ -594,6 +597,8 @@ function showPage(name){
 function renderDash(){
   let active=0,hrs=0,expiring=0,unpaid=0,unpaidAmt=0,renewal=0;
   db.packages.forEach(p=>{
+    const st=db.students.find(x=>x.id===p.studentId);
+    if(!st||st.archived)return;
     const s=pkgStats(p);
     if(s.action==="On track"||s.action==="Renewal coming due"){active++;hrs+=s.remaining;}
     if(!s.expired&&s.daysLeft<=7)expiring++;
@@ -968,10 +973,16 @@ function renderCalendar(){
     const dayEvents=getEventsForDay(dateStr);
     dayEvents.forEach(ev=>{
       const evEl=document.createElement("div");
-      const st=db.students.find(s=>s.id===ev.studentId);
-      evEl.className="cal-event"+(ev.logged?" done":"")+(ev.meetLink?" has-meet":"");
-      evEl.textContent=(ev.time?ev.time+" ":"")+(st?st.name:"?")+": "+(ev.notes||"Session");
-      evEl.onclick=e=>{e.stopPropagation();editEvent(ev.id);};
+      if(ev.isConsult){
+        evEl.className="cal-event consultation"+(ev.logged?" done":"");
+        evEl.textContent=(ev.time?ev.time+" ":"")+"Consult: "+ev.name;
+        evEl.onclick=e=>{e.stopPropagation();openConsultModal(ev.id,null);};
+      } else {
+        const st=db.students.find(s=>s.id===ev.studentId);
+        evEl.className="cal-event"+(ev.logged?" done":"")+(ev.meetLink?" has-meet":"");
+        evEl.textContent=(ev.time?ev.time+" ":"")+(st?st.name:"?")+": "+(ev.notes||"Session");
+        evEl.onclick=e=>{e.stopPropagation();openCalModal(ev.id,null);};
+      }
       cell.appendChild(evEl);
     });
     // Also show logged sessions
@@ -2005,6 +2016,209 @@ function toggleDashUpcoming(){
   }
 }
 
+
+// ── CONSULTATIONS ─────────────────────────────────────────────────────────────
+if(!db.consultations)db.consultations=[];
+if(!db.consultCounter)db.consultCounter=1;
+let editConsultId=null;
+
+function openConsultModal(consultId, prefillDate){
+  editConsultId=consultId||null;
+  // Clear form
+  ["co-date","co-time","co-meetlink","co-name","co-email","co-phone","co-student","co-grade","co-avg","co-topics","co-accom","co-days","co-times","co-notes"].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value="";
+  });
+  document.querySelectorAll("#co-cb-subjects input[type=checkbox]").forEach(cb=>cb.checked=false);
+  document.getElementById("co-format").value="";
+  document.getElementById("co-source").value="";
+  document.getElementById("co-status").value="scheduled";
+  document.getElementById("co-to-lead").value="yes";
+  document.getElementById("co-date").value=prefillDate||selectedDay||today();
+
+  if(consultId){
+    const c=(db.consultations||[]).find(x=>x.id===consultId);
+    if(c){
+      document.getElementById("co-date").value=c.date||"";
+      document.getElementById("co-time").value=c.time||"";
+      document.getElementById("co-meetlink").value=c.meetLink||"";
+      document.getElementById("co-name").value=c.name||"";
+      document.getElementById("co-email").value=c.email||"";
+      document.getElementById("co-phone").value=c.phone||"";
+      document.getElementById("co-student").value=c.studentName||"";
+      document.getElementById("co-grade").value=c.grade||"";
+      document.getElementById("co-avg").value=c.avg||"";
+      document.getElementById("co-topics").value=c.topics||"";
+      document.getElementById("co-accom").value=c.accom||"";
+      document.getElementById("co-days").value=c.days||"";
+      document.getElementById("co-times").value=c.times||"";
+      document.getElementById("co-notes").value=c.notes||"";
+      document.getElementById("co-format").value=c.format||"";
+      document.getElementById("co-source").value=c.source||"";
+      document.getElementById("co-status").value=c.status||"scheduled";
+      // Set checkboxes
+      if(c.subjects){c.subjects.forEach(sub=>{
+        const cb=document.querySelector(`#co-cb-subjects input[value="${sub}"]`);
+        if(cb)cb.checked=true;
+      });}
+    }
+  }
+  openModal("m-consult");
+}
+
+function saveConsult(){
+  const date=document.getElementById("co-date").value;
+  const name=document.getElementById("co-name").value.trim();
+  if(!date||!name){showToast("Date and name are required");return;}
+  const subjects=[...document.querySelectorAll("#co-cb-subjects input[type=checkbox]:checked")].map(c=>c.value);
+  const consult={
+    id:editConsultId||("co"+(db.consultCounter++)),
+    type:"consultation",
+    date,
+    time:document.getElementById("co-time").value,
+    meetLink:document.getElementById("co-meetlink").value.trim(),
+    name,
+    email:document.getElementById("co-email").value.trim(),
+    phone:document.getElementById("co-phone").value.trim(),
+    studentName:document.getElementById("co-student").value.trim(),
+    grade:document.getElementById("co-grade").value.trim(),
+    avg:document.getElementById("co-avg").value.trim(),
+    topics:document.getElementById("co-topics").value.trim(),
+    accom:document.getElementById("co-accom").value.trim(),
+    subjects,
+    days:document.getElementById("co-days").value.trim(),
+    times:document.getElementById("co-times").value.trim(),
+    format:document.getElementById("co-format").value,
+    source:document.getElementById("co-source").value,
+    notes:document.getElementById("co-notes").value.trim(),
+    status:document.getElementById("co-status").value,
+    logged:document.getElementById("co-status").value==="done",
+  };
+
+  if(!db.consultations)db.consultations=[];
+  if(editConsultId){
+    const idx=db.consultations.findIndex(c=>c.id===editConsultId);
+    if(idx>=0)db.consultations[idx]=consult;else db.consultations.push(consult);
+  } else {
+    db.consultations.push(consult);
+  }
+
+  // Optionally add to leads
+  const toLead=document.getElementById("co-to-lead").value;
+  if(toLead==="yes"&&!editConsultId){
+    if(!db.leads)db.leads=[];
+    db.leads.push({
+      id:"ld"+(db.leadCounter++),
+      name,email:consult.email,phone:consult.phone,
+      studentName:consult.studentName,grade:consult.grade,
+      status:"consultation",source:consult.source||"",
+      meetLink:consult.meetLink,notes:consult.notes,
+      date:today(),followupDate:"",
+      formFilled:false,emailSent:false,meetSent:!!consult.meetLink,
+      consultDone:consult.status==="done",followUp:false,proposalSent:false,
+    });
+  }
+
+  saveDB();closeModal("m-consult");editConsultId=null;
+  renderCalendar();renderDash();
+  showToast("Consultation saved!");
+}
+
+// ── FIX showDayView to show consultations + make sessions clickable ────────────
+// Override showDayView completely
+function showDayView(dateStr){
+  const view=document.getElementById("cal-day-view");
+  const title=document.getElementById("cal-day-title");
+  const eventsEl=document.getElementById("cal-day-events");
+  view.style.display="block";
+  const d=new Date(dateStr+"T00:00:00");
+  title.textContent=d.toLocaleDateString("en-CA",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+
+  const scheduled=(db.events||[]).filter(e=>e.date===dateStr).sort((a,b)=>(a.time||"00:00").localeCompare(b.time||"00:00"));
+  const consultations=(db.consultations||[]).filter(c=>c.date===dateStr).sort((a,b)=>(a.time||"00:00").localeCompare(b.time||"00:00"));
+  const logged=db.sessions.filter(s=>s.date===dateStr&&!(db.events||[]).find(e=>e.sessionId===s.id));
+
+  // Hour grid 7am-10pm
+  let gridHTML=`<div style="display:grid;grid-template-columns:56px 1fr;gap:0;border:1px solid var(--border);border-radius:12px;overflow:hidden">`;
+  for(let h=7;h<=22;h++){
+    const hMins=h*60;
+    const isNow=new Date().getHours()===h&&dateStr===today();
+    const sessThisHour=scheduled.filter(ev=>{
+      if(!ev.time)return false;
+      const[hh,mm]=ev.time.split(":").map(Number);return hh===h;
+    });
+    const consultThisHour=consultations.filter(c=>{
+      if(!c.time)return false;
+      const[hh]=c.time.split(":").map(Number);return hh===h;
+    });
+    gridHTML+=`<div style="padding:8px 6px;text-align:right;font-size:11px;font-weight:600;color:var(--soft);border-bottom:1px solid #f3f4f6;border-right:1px solid #f3f4f6;background:${isNow?"var(--navy-light)":"#fafafa"}">${h>12?h-12:h}${h>=12?"pm":"am"}</div>`;
+    gridHTML+=`<div style="padding:4px 8px;border-bottom:1px solid #f3f4f6;min-height:52px;background:${isNow?"var(--navy-light)":"#fff"}">`;
+
+    sessThisHour.forEach(ev=>{
+      const st=db.students.find(s=>s.id===ev.studentId);
+      const p=st&&st.profile?st.profile:{};
+      const meetLink=ev.meetLink||p.meetLink||"";
+      const meetLabel=p.meetLabel||"Meet";
+      const endTime=ev.time&&ev.hours?`${Math.floor(parseInt(ev.time.split(":")[0])+(parseInt(ev.time.split(":")[1]||0)+ev.hours*60)/60)}:${String(Math.round(((parseInt(ev.time.split(":")[1]||0)+ev.hours*60)%60))).padStart(2,"0")}`:"";
+      gridHTML+=`<div style="background:${ev.logged?"var(--green)":"var(--navy)"};color:#fff;border-radius:8px;padding:8px 12px;margin:2px 0;cursor:pointer;font-size:13px" onclick="openCalModal('${ev.id}',null)">
+        <div style="font-weight:700">${ev.time||""}${endTime?" - "+endTime:""} - ${st?st.name:"?"}</div>
+        <div style="opacity:.85;font-size:12px;margin-top:2px">${ev.hours||1}h${ev.notes?" - "+ev.notes.slice(0,40):""}</div>
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+          ${meetLink?`<a href="${meetLink}" target="_blank" onclick="event.stopPropagation()" style="background:rgba(255,255,255,.2);color:#fff;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid rgba(255,255,255,.3)">&#128222; ${meetLabel}</a>`:""}
+          ${!ev.logged?`<span style="opacity:.8;font-size:11px;cursor:pointer;background:rgba(255,255,255,.15);padding:3px 8px;border-radius:6px" onclick="event.stopPropagation();markDone('${ev.id}')">&#10003; Mark Done</span>`:`<span style="opacity:.8;font-size:11px">&#10003; Done</span>`}
+        </div>
+      </div>`;
+    });
+
+    consultThisHour.forEach(c=>{
+      gridHTML+=`<div style="background:#7C3AED;color:#fff;border-radius:8px;padding:8px 12px;margin:2px 0;cursor:pointer;font-size:13px;border-left:4px solid #a5b4fc" onclick="openConsultModal('${c.id}',null)">
+        <div style="font-weight:700">&#128222; ${c.time||""} - Free Consultation</div>
+        <div style="opacity:.85;font-size:12px;margin-top:2px">${c.name}${c.studentName?" (for "+c.studentName+")":""}</div>
+        ${c.meetLink?`<a href="${c.meetLink}" target="_blank" onclick="event.stopPropagation()" style="display:inline-block;margin-top:4px;background:rgba(255,255,255,.2);color:#fff;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid rgba(255,255,255,.3)">&#128222; Join Meeting</a>`:""}
+        <div style="opacity:.7;font-size:11px;margin-top:4px">${c.status==="done"?"&#10003; Completed":c.status==="cancelled"?"Cancelled":"Scheduled"}</div>
+      </div>`;
+    });
+
+    gridHTML+=`</div>`;
+  }
+  gridHTML+=`</div>`;
+
+  // Logged sessions without time at top
+  let loggedHTML="";
+  if(logged.length){
+    loggedHTML=logged.map(sess=>{
+      const st=db.students.find(s=>s.id===sess.studentId);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--green-light);border-radius:10px;margin-bottom:8px;border-left:4px solid var(--green)">
+        <div style="font-size:18px">&#10003;</div>
+        <div><div style="font-weight:700;font-size:14px;color:var(--green)">${st?st.name:"?"} - ${sess.hours}h</div>
+        <div style="font-size:12px;color:var(--soft)">${sess.notes||"Session logged"}</div></div>
+      </div>`;
+    }).join("");
+  }
+
+  // Consultations without time at top
+  const consultNoTime=consultations.filter(c=>!c.time);
+  if(consultNoTime.length){
+    loggedHTML+=consultNoTime.map(c=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f5f0ff;border-radius:10px;margin-bottom:8px;border-left:4px solid #7C3AED;cursor:pointer" onclick="openConsultModal('${c.id}',null)">
+      <div style="font-size:18px">&#128222;</div>
+      <div><div style="font-weight:700;font-size:14px;color:#7C3AED">Free Consultation - ${c.name}</div>
+      <div style="font-size:12px;color:var(--soft)">${c.studentName?"For: "+c.studentName+" - ":""}${c.status}</div></div>
+    </div>`).join("");
+  }
+
+  eventsEl.innerHTML=(loggedHTML?`<div style="margin-bottom:12px">${loggedHTML}</div>`:"")+gridHTML+
+    `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" onclick="openCalModal(null,'${dateStr}')">+ Add Session</button>
+      <button class="btn btn-sm" style="background:#7C3AED;color:#fff" onclick="openConsultModal(null,'${dateStr}')">+ Free Consultation</button>
+    </div>`;
+}
+
+// ── FIX renderCalendar to show consultations too ──────────────────────────
+function getEventsForDay(dateStr){
+  const sessions=(db.events||[]).filter(e=>e.date===dateStr);
+  const consults=(db.consultations||[]).filter(c=>c.date===dateStr).map(c=>({...c,isConsult:true}));
+  return [...sessions,...consults].sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+}
+
 document.getElementById("fi-date").value=today();
 // Render immediately then again after short delay to ensure DOM is ready
 renderDash();
@@ -2365,5 +2579,76 @@ setTimeout(()=>{
   <button onclick="disableEditMode()" style="padding:10px 18px;border-radius:9px;border:1.5px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-weight:700;font-size:13px;cursor:pointer">&#10005; Exit Edit Mode</button>
 </div>
 
+
+<!-- Free Consultation Modal -->
+<div class="overlay" id="m-consult">
+<div class="modal" style="max-width:620px">
+  <div class="modal-hd" style="background:var(--purple-light);border-radius:12px 12px 0 0;margin:-28px -28px 20px;padding:20px 28px">
+    <div class="modal-title" style="color:#7C3AED">&#128222; Free Consultation</div>
+    <button class="btn-icon" onclick="closeModal('m-consult')">&#10005;</button>
+  </div>
+  <div class="form-grid">
+    <div class="intake-sep form-full" style="border-color:#7C3AED;color:#7C3AED">&#128197; Date & Time</div>
+    <div class="field"><label>Date *</label><input id="co-date" type="date"/></div>
+    <div class="field"><label>Time</label><input id="co-time" type="time"/></div>
+    <div class="field form-full"><label>Meeting Link</label><input id="co-meetlink" placeholder="https://meet.google.com/..."/></div>
+
+    <div class="intake-sep form-full" style="border-color:#7C3AED;color:#7C3AED">&#128100; Contact Info</div>
+    <div class="field form-full"><label>Parent / Guardian Name *</label><input id="co-name" placeholder="e.g. Jane Smith"/></div>
+    <div class="field"><label>Email</label><input id="co-email" placeholder="parent@email.com"/></div>
+    <div class="field"><label>Phone</label><input id="co-phone" placeholder="613-555-0100"/></div>
+    <div class="field"><label>Student Name</label><input id="co-student" placeholder="Who is the tutoring for?"/></div>
+    <div class="field"><label>Grade / Subject</label><input id="co-grade" placeholder="e.g. Gr. 10 Math"/></div>
+
+    <div class="intake-sep form-full" style="border-color:#7C3AED;color:#7C3AED">&#128218; Academic Info</div>
+    <div class="field form-full"><label>Subjects Needing Help</label>
+      <div class="cb-grid" id="co-cb-subjects">
+        <label class="cb-label"><input type="checkbox" value="Reading"/> Reading</label>
+        <label class="cb-label"><input type="checkbox" value="Writing"/> Writing</label>
+        <label class="cb-label"><input type="checkbox" value="English"/> English</label>
+        <label class="cb-label"><input type="checkbox" value="ESL"/> ESL</label>
+        <label class="cb-label"><input type="checkbox" value="Mathematics"/> Mathematics</label>
+        <label class="cb-label"><input type="checkbox" value="Science"/> Science</label>
+        <label class="cb-label"><input type="checkbox" value="Biology"/> Biology</label>
+        <label class="cb-label"><input type="checkbox" value="Chemistry"/> Chemistry</label>
+        <label class="cb-label"><input type="checkbox" value="Social Studies"/> Social Studies</label>
+        <label class="cb-label"><input type="checkbox" value="Study Skills"/> Study Skills</label>
+        <label class="cb-label"><input type="checkbox" value="Assignment Help"/> Assignment Help</label>
+        <label class="cb-label"><input type="checkbox" value="Test Prep"/> Test Prep</label>
+      </div>
+    </div>
+    <div class="field"><label>Current Average</label><input id="co-avg" placeholder="e.g. 72%"/></div>
+    <div class="field form-full"><label>Specific Topics / Concerns</label><textarea id="co-topics" placeholder="What do they need help with?"></textarea></div>
+    <div class="field form-full"><label>School Accommodations (IEP, ESL, etc.)</label><input id="co-accom" placeholder="e.g. IEP, ESL Support"/></div>
+
+    <div class="intake-sep form-full" style="border-color:#7C3AED;color:#7C3AED">&#128197; Scheduling Preferences</div>
+    <div class="field"><label>Preferred Days</label><input id="co-days" placeholder="e.g. Mon, Wed, Fri"/></div>
+    <div class="field"><label>Preferred Time</label><input id="co-times" placeholder="e.g. After school, evenings"/></div>
+    <div class="field"><label>Format</label>
+      <select id="co-format"><option value="">Select...</option><option>Online</option><option>In-person</option><option>Either</option></select>
+    </div>
+    <div class="field"><label>How They Heard About Us</label>
+      <select id="co-source"><option value="">Select...</option><option>Instagram / Social Media</option><option>Facebook Group</option><option>Friends/Family</option><option>Website</option><option>Referral</option><option>Other</option></select>
+    </div>
+
+    <div class="intake-sep form-full" style="border-color:#7C3AED;color:#7C3AED">&#128203; Consultation Notes</div>
+    <div class="field form-full"><label>Notes / Prep for Consultation</label><textarea id="co-notes" placeholder="Anything to prepare before the call..."></textarea></div>
+    <div class="field form-full"><label>Status</label>
+      <select id="co-status">
+        <option value="scheduled">Scheduled</option>
+        <option value="done">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+    <div class="field form-full"><label>Convert to Lead after?</label>
+      <select id="co-to-lead"><option value="yes">Yes - add to Leads tracker</option><option value="no">No - just keep on calendar</option></select>
+    </div>
+  </div>
+  <div class="modal-ft">
+    <button class="btn btn-secondary" onclick="closeModal('m-consult')">Cancel</button>
+    <button class="btn" style="background:#7C3AED;color:#fff" onclick="saveConsult()">Save Consultation</button>
+  </div>
+</div>
+</div>
 </body>
 </html>
