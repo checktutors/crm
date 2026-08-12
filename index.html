@@ -474,25 +474,24 @@ function fmt(d){if(!d)return"--";const p=d.split("-");return parseInt(p[2])+" "+
 
 function pkgStats(pkg){
   const end=addDays(pkg.start,30);
-  // Get all packages for this student sorted by start date
+  // All packages for student sorted chronologically
   const allPkgs=db.packages.filter(p=>p.studentId===pkg.studentId).sort((a,b)=>a.start.localeCompare(b.start));
   const pkgIndex=allPkgs.findIndex(p=>p.id===pkg.id);
   const nextPkg=allPkgs[pkgIndex+1]||null;
-  // Sessions in this package window: from pkg.start up to next package start (or end of 30 days)
-  const windowEnd=nextPkg?nextPkg.start:addDays(pkg.start,31);
+  // This package's session window: start date up to (but not including) next package start
+  const windowEnd=nextPkg?nextPkg.start:"9999-99-99";
   const used=db.sessions.filter(s=>s.studentId===pkg.studentId&&s.date>=pkg.start&&s.date<windowEnd).reduce((t,s)=>t+s.hours,0);
-  // Rollover: unused hours from previous package (max 50%)
+  // Rollover from previous package - only unused hours, max 50% of prev package size
   let roll=0;
   if(pkg.prevId){
     const prev=db.packages.find(p=>p.id===pkg.prevId);
     if(prev){
-      // Check if renewed on time (within prev package window)
       const prevEnd=addDays(prev.start,30);
       const renewedOnTime=pkg.start<=prevEnd;
       if(renewedOnTime){
-        // Count sessions used in previous package window
-        const prevNextPkg=allPkgs.find(p=>p.start>prev.start&&p.id!==pkg.id);
-        const prevWindowEnd=prevNextPkg?prevNextPkg.start:addDays(prev.start,31);
+        const prevIndex=allPkgs.findIndex(p=>p.id===prev.id);
+        const prevNext=allPkgs[prevIndex+1]||null;
+        const prevWindowEnd=prevNext?prevNext.start:"9999-99-99";
         const prevUsed=db.sessions.filter(s=>s.studentId===pkg.studentId&&s.date>=prev.start&&s.date<prevWindowEnd).reduce((t,s)=>t+s.hours,0);
         const prevUnused=Math.max(0,prev.size-prevUsed);
         roll=Math.min(prevUnused,prev.size*0.5);
@@ -520,6 +519,11 @@ function studentHours(sid){
   if(!pkg)return{total,remaining:0,pkgTotal:0,used:0};
   const s=pkgStats(pkg);
   return{total,remaining:s.remaining,pkgTotal:s.total,used:s.used};
+}
+// Helper to get package number for a student (1-based, chronological)
+function pkgNumber(sid,pkgId){
+  const pkgs=db.packages.filter(p=>p.studentId===sid).sort((a,b)=>a.start.localeCompare(b.start));
+  return pkgs.findIndex(p=>p.id===pkgId)+1;
 }
 
 const CL=[
@@ -655,7 +659,7 @@ function buildDetail(s){
     [...pkgs].reverse().map((pkg,i)=>{
       const st=pkgStats(pkg),pct=Math.round(st.used/st.total*100);
       const barColor=st.remaining<=1?"var(--red)":st.remaining<=3?"var(--amber)":"var(--navy)";
-      return `<div class="pkg-card${st.expired&&i>0?" expired":""}"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-weight:700;font-size:15px;color:var(--navy)">${i===0?"Current Package":"Previous Package"}</span><div style="display:flex;align-items:center;gap:8px"><span>${sBadge(st.action)}</span><button class="btn-icon btn-sm" onclick="openEditPackage('${pkg.id}')" title="Edit package">&#9998;</button></div></div><div style="display:flex;flex-wrap:wrap;gap:14px;font-size:14px;margin-bottom:12px"><div><span style="color:var(--soft)">Size:</span> <strong>${pkg.size}h${st.roll>0?" + "+st.roll.toFixed(1)+"h rollover":""}</strong></div><div><span style="color:var(--soft)">Price:</span> <strong>$${pkg.price}</strong></div><div><span style="color:var(--soft)">Paid:</span> <strong style="color:${pkg.paid==="Yes"?"var(--green)":"var(--red)"}">${pkg.paid}</strong></div><div><span style="color:var(--soft)">Start:</span> <strong>${fmt(pkg.start)}</strong></div><div><span style="color:var(--soft)">Expires:</span> <strong>${fmt(st.end)}</strong></div></div><div class="hour-track" style="height:8px"><div class="hour-fill" style="width:${pct}%;background:${barColor};height:8px;border-radius:99px"></div></div><div class="hour-lbl"><span>${st.used}h used</span><span><strong>${st.remaining.toFixed(1)}h remaining</strong> of ${st.total.toFixed(1)}h</span></div>${pkg.notes?`<div style="font-size:12px;color:var(--soft);margin-top:8px">${pkg.notes}</div>`:""}</div>`;
+      return `<div class="pkg-card${st.expired&&i>0?" expired":""}"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-weight:700;font-size:15px;color:var(--navy)">${i===0?"Current Package - #"+pkgs.length:"Previous Package - #"+(pkgs.length-i)}</span><div style="display:flex;align-items:center;gap:8px"><span>${sBadge(st.action)}</span><button class="btn-icon btn-sm" onclick="openEditPackage('${pkg.id}')" title="Edit package">&#9998;</button></div></div><div style="display:flex;flex-wrap:wrap;gap:14px;font-size:14px;margin-bottom:12px"><div><span style="color:var(--soft)">Size:</span> <strong>${pkg.size}h${st.roll>0?" + "+st.roll.toFixed(1)+"h rollover":""}</strong></div><div><span style="color:var(--soft)">Price:</span> <strong>$${pkg.price}</strong></div><div><span style="color:var(--soft)">Paid:</span> <strong style="color:${pkg.paid==="Yes"?"var(--green)":"var(--red)"}">${pkg.paid}</strong></div><div><span style="color:var(--soft)">Start:</span> <strong>${fmt(pkg.start)}</strong></div><div><span style="color:var(--soft)">Expires:</span> <strong>${fmt(st.end)}</strong></div></div><div class="hour-track" style="height:8px"><div class="hour-fill" style="width:${pct}%;background:${barColor};height:8px;border-radius:99px"></div></div><div class="hour-lbl"><span>${st.used}h used</span><span><strong>${st.remaining.toFixed(1)}h remaining</strong> of ${st.total.toFixed(1)}h</span></div>${pkg.notes?`<div style="font-size:12px;color:var(--soft);margin-top:8px">${pkg.notes}</div>`:""}</div>`;
     }).join("");
 
   function prow(label,val){
@@ -1405,8 +1409,16 @@ function saveRenewal(){
     pkg.size=size;pkg.price=parseFloat(document.getElementById("rn-price").value)||0;
     pkg.start=date;pkg.paid=document.getElementById("rn-paid").value;
     pkg.notes=document.getElementById("rn-notes").value.trim();
-    saveDB();closeModal("m-renew");editPkgId=null;
-    showDetail(pkg.studentId);renderDash();showToast("Package updated!");
+    saveDB();closeModal("m-renew");
+    const editedSid=pkg.studentId;
+    editPkgId=null;
+    showDetail(editedSid);
+    setTimeout(()=>{
+      // Re-render to show updated hours
+      showDetail(editedSid);
+      renderDash();renderList();
+    },100);
+    showToast("Package updated!");
   } else {
     editPkgId=null;_origSaveRenewal();
   }
