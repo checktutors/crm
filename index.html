@@ -319,6 +319,7 @@ tr:hover td{background:#fafafa}
   </div>
   <div id="ss-warn" style="display:none;background:var(--amber-light);border-radius:9px;padding:9px 13px;font-size:13px;color:var(--amber);margin-top:7px;font-weight:600"></div>
   <div class="modal-ft">
+    <button class="btn btn-danger" id="btn-delete-session" style="display:none;margin-right:auto" onclick="deleteCurrentSession()">Delete Session</button>
     <button class="btn btn-secondary" onclick="closeModal('m-session')">Cancel</button>
     <button class="btn btn-primary" onclick="saveSession()">Log Session</button>
   </div>
@@ -348,6 +349,7 @@ tr:hover td{background:#fafafa}
     </div>
   </div>
   <div class="modal-ft">
+    <button class="btn btn-danger" id="btn-delete-event" style="display:none;margin-right:auto" onclick="deleteCurrentEvent()">Delete</button>
     <button class="btn btn-secondary" onclick="closeModal('m-cal-event')">Cancel</button>
     <button class="btn btn-primary" onclick="saveCalEvent()">Save</button>
   </div>
@@ -419,6 +421,7 @@ tr:hover td{background:#fafafa}
     <div class="field"><label>Add to Leads Tracker?</label><select id="co-to-lead"><option value="yes">Yes</option><option value="no">No</option></select></div>
   </div>
   <div class="modal-ft">
+    <button class="btn btn-danger" id="btn-delete-consult" style="display:none;margin-right:auto" onclick="deleteCurrentConsult()">Delete</button>
     <button class="btn btn-secondary" onclick="closeModal('m-consult')">Cancel</button>
     <button class="btn btn-sm" style="background:var(--purple);color:#fff;padding:10px 18px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer" onclick="saveConsult()">Save Consultation</button>
   </div>
@@ -1121,6 +1124,7 @@ function deleteDoc(sid,did){if(!confirm("Remove this document?"))return;const s=
 let sessSid=null,editSessId=null;
 function openLogSession(sid){
   sessSid=sid;editSessId=null;
+  const delBtn=document.getElementById("btn-delete-session");if(delBtn)delBtn.style.display="none";
   const sel=document.getElementById("ss-student");
   sel.innerHTML="<option value=''>- Select student -</option>"+db.students.filter(s=>!s.archived).map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
   if(sid){sel.value=sid;populatePkgDropdown(sid,"ss-package","ss-pkg-wrap");}
@@ -1146,7 +1150,21 @@ function editSession(sessId){
   const assocEv=(db.events||[]).find(e=>e.sessionId===sessId);
   document.getElementById("ss-time").value=assocEv?assocEv.time||"":"";
   document.getElementById("ss-warn").style.display="none";
+  const delBtn=document.getElementById("btn-delete-session");
+  if(delBtn){delBtn.style.display="block";delBtn.textContent="Delete Session";}
   openModal("m-session");
+}
+function deleteCurrentSession(){
+  if(!editSessId){return;}
+  if(!confirm("Delete this session permanently?"))return;
+  const returnSid=sessSid;
+  db.sessions=db.sessions.filter(s=>s.id!==editSessId);
+  db.events=(db.events||[]).filter(e=>e.sessionId!==editSessId);
+  editSessId=null;
+  saveDB();closeModal("m-session");
+  if(returnSid){showDetail(returnSid);setTimeout(()=>{const tabs=[...document.querySelectorAll("#dtabs-"+returnSid+" .tab")];const t=tabs.find(x=>x.textContent.includes("Session"));if(t)switchTab(returnSid,"sessions",t);},50);}
+  else renderSessions();
+  renderDash();renderList();renderCalendar();showToast("Session deleted!");
 }
 function onSessChange(){
   const sid=document.getElementById("ss-student").value;
@@ -1524,6 +1542,8 @@ function openCalModal(eventId,prefillDate){
   document.getElementById("ce-log").value="scheduled";
   document.getElementById("ce-student-links").style.display="none";
   document.getElementById("ce-pkg-wrap").style.display="none";
+  const delEvBtn=document.getElementById("btn-delete-event");
+  if(delEvBtn)delEvBtn.style.display=eventId?"block":"none";
   if(eventId){
     const ev=(db.events||[]).find(e=>e.id===eventId);
     if(ev){
@@ -1540,6 +1560,20 @@ function openCalModal(eventId,prefillDate){
     document.getElementById("ce-date").value=prefillDate||selectedDay||today();
   }
   openModal("m-cal-event");
+}
+function deleteCurrentEvent(){
+  if(!editEventId)return;
+  if(!confirm("Delete this scheduled session?"))return;
+  // Also remove linked session if it was auto-logged
+  const ev=(db.events||[]).find(e=>e.id===editEventId);
+  if(ev&&ev.sessionId&&ev.logged){
+    db.sessions=db.sessions.filter(s=>s.id!==ev.sessionId);
+  }
+  db.events=(db.events||[]).filter(e=>e.id!==editEventId);
+  editEventId=null;
+  saveDB();closeModal("m-cal-event");renderCalendar();renderDash();renderList();
+  if(detailSid)showDetail(detailSid);
+  showToast("Session deleted!");
 }
 function saveCalEvent(){
   const studentId=document.getElementById("ce-student").value;
@@ -1585,7 +1619,16 @@ function openConsultModal(consultId,prefillDate){
       if(c.subjects)c.subjects.forEach(sub=>{const cb=document.querySelector(`#co-cb-subjects input[value="${sub}"]`);if(cb)cb.checked=true;});
     }
   }
+  const delCBtn=document.getElementById("btn-delete-consult");
+  if(delCBtn)delCBtn.style.display=consultId?"block":"none";
   openModal("m-consult");
+}
+function deleteCurrentConsult(){
+  if(!editConsultId)return;
+  if(!confirm("Delete this consultation?"))return;
+  db.consultations=(db.consultations||[]).filter(c=>c.id!==editConsultId);
+  editConsultId=null;
+  saveDB();closeModal("m-consult");renderCalendar();renderDash();showToast("Consultation deleted!");
 }
 function saveConsult(){
   const date=document.getElementById("co-date").value;const name=document.getElementById("co-name").value.trim();
