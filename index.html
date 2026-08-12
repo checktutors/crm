@@ -363,7 +363,7 @@ tr:hover td{background:#fafafa}
 
 <div class="overlay" id="m-renew">
 <div class="modal">
-  <div class="modal-hd"><div class="modal-title">&#128260; Renew Package</div><button class="btn-icon" onclick="closeModal('m-renew')">&#10005;</button></div>
+  <div class="modal-hd"><div class="modal-title">Renew Package</div><button class="btn-icon" onclick="closeModal('m-renew')">&#10005;</button></div>
   <div id="rn-label" style="font-size:13px;color:var(--soft);margin-bottom:14px"></div>
   <div id="rn-info" style="display:none;background:var(--navy-light);border-radius:9px;padding:10px 14px;font-size:13px;color:var(--navy);margin-bottom:14px;font-weight:600"></div>
   <div class="form-grid">
@@ -391,7 +391,7 @@ tr:hover td{background:#fafafa}
       <button class="btn btn-secondary btn-sm" onclick="calNext()">&#8594;</button>
       <button class="btn btn-secondary btn-sm" onclick="goToday()">Today</button>
       <button class="btn btn-primary" onclick="openCalModal(null,null)">+ Add Session</button>
-      <button class="btn" style="background:#7C3AED;color:#fff" onclick="openConsultModal(null,null)">+ Free Consultation</button>
+      <button class="btn" style="background:#7C3AED;color:#fff;white-space:nowrap" onclick="openConsultModal(null,selectedDay||today())">+ Free Consultation</button>
     </div>
   </div>
   <div class="card" style="padding:0;overflow:hidden">
@@ -417,10 +417,14 @@ tr:hover td{background:#fafafa}
 <!-- Calendar Event Modal -->
 <div class="overlay" id="m-cal-event">
 <div class="modal">
-  <div class="modal-hd"><div class="modal-title" id="cal-modal-title">&#128197; Schedule Session</div><button class="btn-icon" onclick="closeModal('m-cal-event')">&#10005;</button></div>
+  <div class="modal-hd"><div class="modal-title" id="cal-modal-title">Schedule Session</div><button class="btn-icon" onclick="closeModal('m-cal-event')">&#10005;</button></div>
   <div class="form-grid">
     <div class="field form-full"><label>Student *</label>
       <select id="ce-student" onchange="onCalStudentChange()"><option value="">- Select student -</option></select>
+    </div>
+    <div class="field form-full" id="ce-pkg-selector-wrap" style="display:none">
+      <label>Package</label>
+      <select id="ce-package" style="border-color:var(--navy)"></select>
     </div>
     <div class="field"><label>Date *</label><input id="ce-date" type="date"/></div>
     <div class="field"><label>Time</label><input id="ce-time" type="time" placeholder="e.g. 16:00"/></div>
@@ -874,11 +878,15 @@ function openLogSession(sid){
   if(sid)sel.value=sid;
   document.getElementById("ss-date").value=today();
   document.getElementById("ss-hours").value="";document.getElementById("ss-notes").value="";
-  document.getElementById("ss-warn").style.display="none";onSessChange();openModal("m-session");
+  document.getElementById("ss-warn").style.display="none";
+  document.getElementById("ss-pkg-selector-wrap").style.display="none";
+  if(sid)populatePkgDropdown("ss-student","ss-package","ss-pkg-selector-wrap");
+  onSessChange();openModal("m-session");
 }
 function onSessChange(){
   const sid=document.getElementById("ss-student").value,warn=document.getElementById("ss-warn");
-  if(!sid){warn.style.display="none";return;}
+  if(!sid){warn.style.display="none";document.getElementById("ss-pkg-selector-wrap").style.display="none";return;}
+  populatePkgDropdown("ss-student","ss-package","ss-pkg-selector-wrap");
   const pkg=activePkg(sid);
   if(!pkg){
     warn.style.display="block";
@@ -1081,15 +1089,34 @@ function openCalModal(eventId,prefillDate){
   openModal("m-cal-event");
 }
 
+function populatePkgDropdown(studentSelectId, pkgSelectId, wrapId){
+  const sid=document.getElementById(studentSelectId).value;
+  const wrap=document.getElementById(wrapId);
+  const sel=document.getElementById(pkgSelectId);
+  if(!sid||!wrap||!sel){if(wrap)wrap.style.display="none";return;}
+  const pkgs=db.packages.filter(p=>p.studentId===sid).sort((a,b)=>b.start.localeCompare(a.start));
+  if(!pkgs.length){wrap.style.display="none";return;}
+  wrap.style.display="block";
+  sel.innerHTML=pkgs.map((p,i)=>{
+    const st=pkgStats(p);
+    const num=db.packages.filter(x=>x.studentId===sid).sort((a,b)=>a.start.localeCompare(b.start)).findIndex(x=>x.id===p.id)+1;
+    const label=i===0?`Current Package #${num}`:`Previous Package #${num}`;
+    return `<option value="${p.id}">${label} - ${st.remaining.toFixed(1)}h remaining of ${st.total}h (${fmt(p.start)} - ${fmt(st.end)})</option>`;
+  }).join("");
+}
+
 function onCalStudentChange(){
   const sid=document.getElementById("ce-student").value;
   const linksEl=document.getElementById("ce-student-links");
-  if(!sid){linksEl.style.display="none";return;}
+  if(!sid){if(linksEl)linksEl.style.display="none";document.getElementById("ce-pkg-selector-wrap").style.display="none";return;}
   const s=db.students.find(x=>x.id===sid);const p=s&&s.profile?s.profile:{};
-  if(p.classroomLink||p.meetLink){
-    linksEl.style.display="block";
-    linksEl.innerHTML=(p.classroomLink?`<a href="${p.classroomLink}" target="_blank" style="color:var(--navy);margin-right:12px">&#127979; Open Classroom</a>`:"")+(p.meetLink?`<a href="${p.meetLink}" target="_blank" style="color:#2e7d32">&#128222; ${p.meetLabel||"Open Meet"}</a>`:"")+`<div style="font-size:11px;color:var(--soft);margin-top:4px;font-weight:400">Links saved on this student's profile</div>`;
-  } else linksEl.style.display="none";
+  if(linksEl){
+    if(p.classroomLink||p.meetLink){
+      linksEl.style.display="block";
+      linksEl.innerHTML=(p.classroomLink?`<a href="${p.classroomLink}" target="_blank" style="color:var(--navy);margin-right:12px">&#127979; Open Classroom</a>`:"")+(p.meetLink?`<a href="${p.meetLink}" target="_blank" style="color:#2e7d32">&#128222; ${p.meetLabel||"Open Meet"}</a>`:"")+`<div style="font-size:11px;color:var(--soft);margin-top:4px;font-weight:400">Links saved on this student's profile</div>`;
+    } else linksEl.style.display="none";
+  }
+  populatePkgDropdown("ce-student","ce-package","ce-pkg-selector-wrap");
 }
 
 function saveCalEvent(){
