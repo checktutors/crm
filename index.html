@@ -144,6 +144,8 @@ tr:hover td{background:#fafafa}
     <div class="nav-tab" onclick="showPage('calendar')">&#128197; Calendar</div>
     <div class="nav-tab" onclick="showPage('leads')">&#128233; Leads</div>
     <div class="nav-tab" onclick="showPage('analytics')">&#128200; Analytics</div>
+    <div class="nav-tab" onclick="showPage('social')">&#128247; Social</div>
+    <div class="nav-tab" onclick="showPage('business')">&#128188; My Business</div>
     <div class="nav-tab" onclick="showPage('settings')">&#9881;&#65039; Settings</div>
   </div>
   <a href="https://www.checktutors.com" target="_blank" style="padding:7px 12px;border-radius:8px;border:1.5px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);font-size:12px;font-weight:600;color:rgba(255,255,255,.8);cursor:pointer;margin-left:8px;white-space:nowrap;text-decoration:none" onmouseover="this.style.background='rgba(255,255,255,.16)'" onmouseout="this.style.background='rgba(255,255,255,.08)'">Website</a>
@@ -213,6 +215,14 @@ tr:hover td{background:#fafafa}
       <button class="btn btn-primary btn-sm" onclick="openCalModal(null,null)">+ Add Session</button>
       <button class="btn btn-sm" style="background:var(--purple);color:#fff" onclick="openConsultModal(null,null)">+ Consultation</button>
     </div>
+  </div>
+  <div style="display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:12px;font-weight:700;color:var(--soft);text-transform:uppercase;letter-spacing:.4px">Filter:</span>
+    <button class="btn btn-sm cal-filter active" data-filter="all" onclick="setCalFilter('all',this)" style="background:var(--navy);color:#fff">All</button>
+    <button class="btn btn-secondary btn-sm cal-filter" data-filter="sessions" onclick="setCalFilter('sessions',this)">Sessions Only</button>
+    <button class="btn btn-secondary btn-sm cal-filter" data-filter="consultations" onclick="setCalFilter('consultations',this)">Consultations Only</button>
+    <button class="btn btn-secondary btn-sm cal-filter" data-filter="upcoming" onclick="setCalFilter('upcoming',this)">Upcoming Only</button>
+    <button class="btn btn-secondary btn-sm cal-filter" data-filter="logged" onclick="setCalFilter('logged',this)">Completed Only</button>
   </div>
   <div class="card" style="padding:0;overflow:hidden">
     <div style="display:grid;grid-template-columns:repeat(7,1fr);background:var(--navy)">
@@ -905,6 +915,8 @@ function showPage(name){
   if(name==="leads")renderLeads();
   if(name==="analytics")renderAnalytics();
   if(name==="settings")renderBackupHistory();
+  if(name==="social")renderSocialPage();
+  if(name==="business")renderBusinessPage();
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
@@ -1803,5 +1815,301 @@ renderList();
 renderSessions();
 setTimeout(()=>{renderDash();renderList();},300);
 </script>
+
+<!-- Social Media Page -->
+<div class="page" id="page-social">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <h2 style="font-size:22px;font-weight:800;color:var(--navy)">&#128247; Social Media</h2>
+    <button class="btn btn-primary" onclick="openModal('m-social-post')">+ New Post</button>
+  </div>
+
+  <!-- Social Calendar -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      &#128197; Content Calendar
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-secondary btn-sm" onclick="socialCalPrev()">&#8592;</button>
+        <span id="social-cal-label" style="font-size:13px;font-weight:700;color:var(--navy);min-width:120px;text-align:center"></span>
+        <button class="btn btn-secondary btn-sm" onclick="socialCalNext()">&#8594;</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);background:var(--navy);border-radius:10px 10px 0 0;overflow:hidden;margin:0 -22px;padding:0 22px">
+      <div style="padding:7px;text-align:center;font-size:10px;font-weight:700;color:rgba(255,255,255,.7)">SUN</div>
+      <div style="padding:7px;text-align:center;font-size:10px;font-weight:700;color:rgba(255,255,255,.7)">MON</div>
+      <div style="padding:7px;text-align:center;font-size:10px;font-weight:700;color:rgba(255,255,255,.7)">TUE</div>
+      <div style="padding:7px;text-align:center;font-size:10px;font-weight:700;color:rgba(255,255,255,.7)">WED</div>
+      <div style="padding:7px;text-align:center;font-size:10px;font-weight:700;color:rgba(255,255,255,.7)">THU</div>
+      <div style="padding:7px;text-align:center;font-size:10px;font-weight:700;color:rgba(255,255,255,.7)">FRI</div>
+      <div style="padding:7px;text-align:center;font-size:10px;font-weight:700;color:rgba(255,255,255,.7)">SAT</div>
+    </div>
+    <div id="social-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;overflow:hidden"></div>
+  </div>
+
+  <!-- Post Queue -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card">
+      <div class="card-title">&#128228; Scheduled Posts</div>
+      <div id="social-scheduled"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">&#128204; Post Ideas Bank</div>
+      <div id="social-ideas"></div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="openSocialPost('idea')">+ Add Idea</button>
+    </div>
+  </div>
+
+  <!-- Platform Stats -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-title">&#127919; Content Pillars</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
+      <div style="background:#e0f2fe;border-radius:12px;padding:14px;text-align:center;border-left:4px solid #0891B2">
+        <div style="font-size:22px">&#128205;</div>
+        <div style="font-weight:700;font-size:13px;color:#0891B2;margin-top:5px">Ottawa Study Spots</div>
+        <div style="font-size:11px;color:var(--soft);margin-top:3px">Save-worthy content</div>
+      </div>
+      <div style="background:#f0fdf4;border-radius:12px;padding:14px;text-align:center;border-left:4px solid var(--green)">
+        <div style="font-size:22px">&#128218;</div>
+        <div style="font-weight:700;font-size:13px;color:var(--green);margin-top:5px">Ontario Curriculum</div>
+        <div style="font-size:11px;color:var(--soft);margin-top:3px">Authority content</div>
+      </div>
+      <div style="background:#fffbeb;border-radius:12px;padding:14px;text-align:center;border-left:4px solid var(--amber)">
+        <div style="font-size:22px">&#128514;</div>
+        <div style="font-weight:700;font-size:13px;color:var(--amber);margin-top:5px">Relatable Student Life</div>
+        <div style="font-size:11px;color:var(--soft);margin-top:3px">Engagement content</div>
+      </div>
+      <div style="background:var(--navy-light);border-radius:12px;padding:14px;text-align:center;border-left:4px solid var(--navy)">
+        <div style="font-size:22px">&#128161;</div>
+        <div style="font-weight:700;font-size:13px;color:var(--navy);margin-top:5px">Study Tips</div>
+        <div style="font-size:11px;color:var(--soft);margin-top:3px">Value content</div>
+      </div>
+      <div style="background:var(--purple-light);border-radius:12px;padding:14px;text-align:center;border-left:4px solid var(--purple)">
+        <div style="font-size:22px">&#127891;</div>
+        <div style="font-weight:700;font-size:13px;color:var(--purple);margin-top:5px">Check Tutors</div>
+        <div style="font-size:11px;color:var(--soft);margin-top:3px">Subtle marketing</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- My Business Page -->
+<div class="page" id="page-business">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <h2 style="font-size:22px;font-weight:800;color:var(--navy)">&#128188; My Business</h2>
+  </div>
+
+  <!-- Sub-tabs -->
+  <div class="stabs" id="business-tabs" style="margin-bottom:20px">
+    <div class="stab active" onclick="setBizTab('profile',this)">&#128100; My Profile</div>
+    <div class="stab" onclick="setBizTab('goals',this)">&#127919; Goals</div>
+    <div class="stab" onclick="setBizTab('admin',this)">&#128203; Admin & Templates</div>
+    <div class="stab" onclick="setBizTab('drive',this)">&#128190; Drive & Files</div>
+  </div>
+
+  <!-- My Profile Tab -->
+  <div id="biz-profile">
+    <div class="card">
+      <div class="card-title">&#128100; Francesca - Check Tutors</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--soft);text-transform:uppercase;margin-bottom:8px">Business Info</div>
+          <div class="prof-row"><div class="prof-label">Business Name</div><div class="prof-val" id="biz-name" contenteditable="false">Check Tutors</div></div>
+          <div class="prof-row"><div class="prof-label">Location</div><div class="prof-val" id="biz-location" contenteditable="false">Ottawa, Ontario</div></div>
+          <div class="prof-row"><div class="prof-label">Email</div><div class="prof-val" id="biz-email" contenteditable="false">admin@checktutors.com</div></div>
+          <div class="prof-row"><div class="prof-label">Website</div><div class="prof-val"><a href="https://checktutors.com" target="_blank" style="color:var(--navy)">checktutors.com</a></div></div>
+          <div class="prof-row"><div class="prof-label">Instagram</div><div class="prof-val"><a href="https://instagram.com/checktutors" target="_blank" style="color:var(--purple)">@checktutors</a></div></div>
+          <div class="prof-row"><div class="prof-label">Services</div><div class="prof-val" id="biz-services" contenteditable="false">ESL, English, Math, Science, Study Skills</div></div>
+          <div class="prof-row"><div class="prof-label">Formats</div><div class="prof-val" id="biz-format" contenteditable="false">Online & In-Person, Ottawa</div></div>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--soft);text-transform:uppercase;margin-bottom:8px">Pricing</div>
+          <div class="prof-row"><div class="prof-label">4h Package</div><div class="prof-val">$180/month ($45/hr)</div></div>
+          <div class="prof-row"><div class="prof-label">8h Package</div><div class="prof-val">$340/month ($42.50/hr) - Most Popular</div></div>
+          <div class="prof-row"><div class="prof-label">12h Package</div><div class="prof-val">$480/month ($40/hr)</div></div>
+          <div class="prof-row"><div class="prof-label">Free Consultation</div><div class="prof-val">20 min - no commitment</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Goals Tab -->
+  <div id="biz-goals" style="display:none">
+    <div class="stat-grid">
+      <div class="stat-card c-navy"><div class="stat-label">Student Goal</div><div class="stat-value">10</div><div class="stat-sub">target students</div></div>
+      <div class="stat-card c-green"><div class="stat-label">Current Students</div><div class="stat-value" id="biz-current-students">0</div><div class="stat-sub">active</div></div>
+      <div class="stat-card c-amber"><div class="stat-label">Hours Goal</div><div class="stat-value">30</div><div class="stat-sub">hours/week</div></div>
+      <div class="stat-card c-blue"><div class="stat-label">Revenue Goal</div><div class="stat-value">$3,400</div><div class="stat-sub">per month</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">&#127919; September Push Goals</div>
+      <div id="biz-goals-list"></div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="addBizGoal()">+ Add Goal</button>
+    </div>
+    <div class="card">
+      <div class="card-title">&#128640; Business Milestones</div>
+      <div style="display:flex;flex-direction:column;gap:10px" id="biz-milestones"></div>
+    </div>
+  </div>
+
+  <!-- Admin & Templates Tab -->
+  <div id="biz-admin" style="display:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="card">
+        <div class="card-title">&#128231; Email Templates</div>
+        <div id="email-templates-list"></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="openModal('m-template')">+ Add Template</button>
+      </div>
+      <div class="card">
+        <div class="card-title">&#128196; Document Templates</div>
+        <div style="display:flex;flex-direction:column;gap:9px" id="doc-templates-list">
+          <div style="background:var(--navy-light);border-radius:10px;padding:13px;display:flex;align-items:center;gap:11px">
+            <div style="font-size:22px">&#128196;</div>
+            <div style="flex:1"><div style="font-weight:600;font-size:13px">Terms & Conditions</div><div style="font-size:11px;color:var(--soft)">Service agreement for students</div></div>
+            <a href="https://drive.google.com" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;font-size:11px">Open</a>
+          </div>
+          <div style="background:var(--navy-light);border-radius:10px;padding:13px;display:flex;align-items:center;gap:11px">
+            <div style="font-size:22px">&#128203;</div>
+            <div style="flex:1"><div style="font-weight:600;font-size:13px">Intake Form</div><div style="font-size:11px;color:var(--soft)">Student onboarding form</div></div>
+            <a href="https://docs.google.com/forms" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;font-size:11px">Open</a>
+          </div>
+          <div style="background:var(--navy-light);border-radius:10px;padding:13px;display:flex;align-items:center;gap:11px">
+            <div style="font-size:22px">&#127881;</div>
+            <div style="flex:1"><div style="font-weight:600;font-size:13px">Welcome Package</div><div style="font-size:11px;color:var(--soft)">New student welcome info</div></div>
+            <a href="https://drive.google.com" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;font-size:11px">Open</a>
+          </div>
+          <div style="background:var(--navy-light);border-radius:10px;padding:13px;display:flex;align-items:center;gap:11px">
+            <div style="font-size:22px">&#128178;</div>
+            <div style="flex:1"><div style="font-weight:600;font-size:13px">Invoice Template</div><div style="font-size:11px;color:var(--soft)">Monthly billing template</div></div>
+            <a href="https://drive.google.com" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;font-size:11px">Open</a>
+          </div>
+          <div style="background:var(--navy-light);border-radius:10px;padding:13px;display:flex;align-items:center;gap:11px">
+            <div style="font-size:22px">&#128202;</div>
+            <div style="flex:1"><div style="font-weight:600;font-size:13px">Progress Report</div><div style="font-size:11px;color:var(--soft)">Monthly student progress</div></div>
+            <a href="https://drive.google.com" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;font-size:11px">Open</a>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="addDocTemplate()">+ Add Document</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:0">
+      <div class="card-title">&#128270; Quick Actions</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:9px">
+        <a href="https://calendar.google.com" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#128197; Google Calendar</a>
+        <a href="https://classroom.google.com" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#127979; Google Classroom</a>
+        <a href="https://mail.google.com" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#128231; Gmail</a>
+        <a href="https://docs.google.com/forms" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#128203; Intake Form</a>
+        <a href="https://instagram.com/checktutors" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#128247; Instagram</a>
+        <a href="https://checktutors.com" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#127760; Website</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drive & Files Tab -->
+  <div id="biz-drive" style="display:none">
+    <div class="card">
+      <div class="card-title">&#128190; Google Drive Links</div>
+      <p style="font-size:13px;color:var(--soft);margin-bottom:14px">Paste your Google Drive folder links here for quick access.</p>
+      <div id="drive-links-list"></div>
+      <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="openModal('m-drive-link')">+ Add Drive Folder</button>
+    </div>
+    <div class="card" style="margin-top:0">
+      <div class="card-title">&#128161; Quick Tip</div>
+      <p style="font-size:13px;color:var(--soft);line-height:1.7">Right-click any Google Drive folder and select <strong>"Get Link"</strong> to copy the shareable link, then paste it above. Your main tutoring folder, student resources, templates, and invoices can all live here for one-click access.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Social Post Modal -->
+<div class="overlay" id="m-social-post">
+<div class="modal" style="max-width:580px">
+  <div class="modal-hd"><div class="modal-title" id="social-modal-title">&#128247; New Post</div><button class="btn-icon" onclick="closeModal('m-social-post')">&#10005;</button></div>
+  <div class="form-grid">
+    <div class="field form-full"><label>Caption / Content *</label><textarea id="sp-caption" placeholder="Write your post caption here..." style="min-height:100px"></textarea></div>
+    <div class="field"><label>Platform</label>
+      <select id="sp-platform">
+        <option value="instagram">Instagram</option>
+        <option value="facebook">Facebook Group</option>
+        <option value="both">Both</option>
+        <option value="tiktok">TikTok</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="field"><label>Content Type</label>
+      <select id="sp-type">
+        <option value="tip">Study Tip</option>
+        <option value="spot">Ottawa Study Spot</option>
+        <option value="curriculum">Ontario Curriculum</option>
+        <option value="relatable">Relatable / Student Life</option>
+        <option value="promo">Check Tutors Promo</option>
+        <option value="reel">Reel Idea</option>
+        <option value="story">Story Idea</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="field"><label>Scheduled Date</label><input id="sp-date" type="date"/></div>
+    <div class="field"><label>Time to Post</label><input id="sp-time" type="time"/></div>
+    <div class="field form-full"><label>Hashtags</label><input id="sp-hashtags" placeholder="#OttawaTutor #OttawaStudents #StudyTips"/></div>
+    <div class="field form-full"><label>Notes / Hook Idea</label><textarea id="sp-notes" placeholder="Hook, visual idea, or notes..."></textarea></div>
+    <div class="field"><label>Status</label>
+      <select id="sp-status">
+        <option value="idea">Idea</option>
+        <option value="draft">Draft</option>
+        <option value="scheduled">Scheduled</option>
+        <option value="posted">Posted</option>
+      </select>
+    </div>
+  </div>
+  <div class="modal-ft">
+    <button class="btn btn-danger" id="btn-delete-post" style="display:none;margin-right:auto" onclick="deleteCurrentPost()">Delete</button>
+    <button class="btn btn-secondary" onclick="closeModal('m-social-post')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveSocialPost()">Save Post</button>
+  </div>
+</div>
+</div>
+
+<!-- Email Template Modal -->
+<div class="overlay" id="m-template">
+<div class="modal" style="max-width:600px">
+  <div class="modal-hd"><div class="modal-title" id="tmpl-modal-title">&#128231; Email Template</div><button class="btn-icon" onclick="closeModal('m-template')">&#10005;</button></div>
+  <div class="form-grid">
+    <div class="field form-full"><label>Template Name *</label><input id="tmpl-name" placeholder="e.g. Welcome Email, Follow-up, Renewal Reminder"/></div>
+    <div class="field"><label>Category</label>
+      <select id="tmpl-category">
+        <option value="onboarding">Onboarding</option>
+        <option value="followup">Follow-up</option>
+        <option value="renewal">Renewal</option>
+        <option value="invoice">Invoice / Payment</option>
+        <option value="progress">Progress Update</option>
+        <option value="inquiry">Inquiry Response</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="field"><label>Subject Line</label><input id="tmpl-subject" placeholder="Email subject line..."/></div>
+    <div class="field form-full"><label>Email Body *</label><textarea id="tmpl-body" placeholder="Write your email template here. Use [Student Name], [Parent Name], [Date] as placeholders..." style="min-height:200px"></textarea></div>
+    <div class="field form-full"><label>Notes</label><input id="tmpl-notes" placeholder="When to use this template..."/></div>
+  </div>
+  <div class="modal-ft">
+    <button class="btn btn-danger" id="btn-delete-tmpl" style="display:none;margin-right:auto" onclick="deleteCurrentTemplate()">Delete</button>
+    <button class="btn btn-secondary" onclick="closeModal('m-template')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveTemplate()">Save Template</button>
+  </div>
+</div>
+</div>
+
+<!-- Drive Link Modal -->
+<div class="overlay" id="m-drive-link">
+<div class="modal" style="max-width:460px">
+  <div class="modal-hd"><div class="modal-title">&#128190; Add Drive Folder</div><button class="btn-icon" onclick="closeModal('m-drive-link')">&#10005;</button></div>
+  <div class="form-grid">
+    <div class="field form-full"><label>Folder Name *</label><input id="dl-name" placeholder="e.g. Main Tutoring Folder, Student Resources"/></div>
+    <div class="field form-full"><label>Google Drive Link *</label><input id="dl-url" placeholder="https://drive.google.com/drive/folders/..."/></div>
+    <div class="field form-full"><label>Description</label><input id="dl-desc" placeholder="What's in this folder?"/></div>
+  </div>
+  <div class="modal-ft">
+    <button class="btn btn-secondary" onclick="closeModal('m-drive-link')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveDriveLink()">Add Link</button>
+  </div>
+</div>
+</div>
+
 </body>
 </html>
