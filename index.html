@@ -2206,13 +2206,13 @@ function renderBusinessPage(){
 }
 
 function setBizTab(tab,el){
-  ["profile","goals","admin","drive"].forEach(t=>{const e=document.getElementById("biz-"+t);if(e)e.style.display=t===tab?"block":"none";});
+  ["profile","goals","admin","logos","drive"].forEach(t=>{const e=document.getElementById("biz-"+t);if(e)e.style.display=t===tab?"block":"none";});
   document.querySelectorAll("#business-tabs .stab").forEach(t=>t.classList.remove("active"));
   el.classList.add("active");
-  if(tab==="goals")renderBizGoals();
-  if(tab==="admin"){renderEmailTemplates();}
+  if(tab==="goals"){renderBizGoals();renderBizGoalsTargets();}
+  if(tab==="admin"){renderEmailTemplates();renderDocTemplates();}
+  if(tab==="logos"){renderLogos();renderBrandColors();}
   if(tab==="drive")renderDriveLinks();
-  if(tab==="profile")renderBusinessPage();
 }
 
 function enableProfileEdit(){
