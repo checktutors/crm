@@ -149,6 +149,8 @@ tr:hover td{background:#fafafa}
     <div class="nav-tab" onclick="showPage('students')">&#128105;&#8205;&#127979; Students</div>
     <div class="nav-tab" onclick="showPage('sessions')">&#128221; Sessions</div>
     <div class="nav-tab" onclick="showPage('calendar')">&#128197; Calendar</div>
+    <div class="nav-tab" onclick="showPage('leads')">&#128233; Leads</div>
+    <div class="nav-tab" onclick="showPage('settings')">&#9881;&#65039; Settings</div>
   </div>
   <a href="https://www.checktutors.com" target="_blank" style="padding:8px 14px;border-radius:8px;border:1.5px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);font-size:12px;font-weight:600;color:rgba(255,255,255,.8);cursor:pointer;margin-left:10px;white-space:nowrap;text-decoration:none;transition:.15s" onmouseover="this.style.background='rgba(255,255,255,.16)'" onmouseout="this.style.background='rgba(255,255,255,.08)'">&#8592; Website</a>
 </nav>
@@ -156,7 +158,13 @@ tr:hover td{background:#fafafa}
 <div class="page active" id="page-dashboard">
   <div class="stat-grid" id="d-stats"></div>
   <div class="dash-cols">
-    <div><div class="card"><div class="card-title">&#9888;&#65039; Action Needed</div><div id="d-actions"></div></div></div>
+    <div>
+      <div class="card"><div class="card-title">&#9888;&#65039; Action Needed</div><div id="d-actions"></div></div>
+      <div class="card" style="cursor:pointer" onclick="showPage('calendar')">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">&#128197; Upcoming Sessions <span style="font-size:11px;color:var(--navy);font-weight:600">View Calendar &#8594;</span></div>
+        <div id="d-upcoming"></div>
+      </div>
+    </div>
     <div>
       <div class="card"><div class="card-title">&#128197; Expiring in 14 days</div><div id="d-expiring"></div></div>
       <div class="card"><div class="card-title">&#128221; Recent Sessions</div><div id="d-recent"></div></div>
@@ -473,9 +481,10 @@ function pkgStats(pkg){
   let action;
   if(pkg.paid==="No")action="Collect payment";
   else if(renewed)action="Renewed";
-  else if(expired)action="Send renewal reminder";
-  else if(daysLeft<=7)action="Renewal coming due";
-  else action="On track";
+  else if(expired&&tod>end)action="Send renewal reminder";
+  else if(!expired&&daysLeft<=7&&daysLeft>=0)action="Renewal coming due";
+  else if(!expired)action="On track";
+  else action="Renewed";
   return{end,used,roll,total,remaining,expired,renewed,daysLeft,action};
 }
 function activePkg(sid){
@@ -524,6 +533,8 @@ function showPage(name){
   if(name==="students"){showList();renderList();}
   if(name==="sessions")renderSessions();
   if(name==="calendar"){renderCalendar();populateCalStudentDropdown();}
+  if(name==="settings"){renderBackupHistory();}
+  if(name==="leads"){renderLeads();}
 }
 
 function renderDash(){
@@ -543,7 +554,7 @@ function renderDash(){
     `<div class="stat-card c-blue"><div class="stat-label">Need Renewal</div><div class="stat-value">${renewal}</div></div>`;
   const acts=[];
   db.packages.forEach(p=>{
-    const s=pkgStats(p),st=db.students.find(x=>x.id===p.studentId);if(!st)return;
+    const s=pkgStats(p),st=db.students.find(x=>x.id===p.studentId);if(!st||st.archived)return;
     if(s.action==="Collect payment")acts.push(`<div class="alert-row al-red"><div class="al-icon">&#128179;</div><div class="al-text">${st.name}<div class="al-sub">$${p.price} outstanding</div></div></div>`);
     if(s.action==="Send renewal reminder")acts.push(`<div class="alert-row al-amber"><div class="al-icon">&#128276;</div><div class="al-text">${st.name}<div class="al-sub">Package expired - send renewal nudge</div></div></div>`);
     if(s.action==="Renewal coming due")acts.push(`<div class="alert-row al-amber"><div class="al-icon">&#9201;&#65039;</div><div class="al-text">${st.name}<div class="al-sub">Expires in ${s.daysLeft}d</div></div></div>`);
@@ -554,6 +565,27 @@ function renderDash(){
     const s=pkgStats(p),st=db.students.find(x=>x.id===p.studentId);
     return `<div class="alert-row ${s.daysLeft<=7?"al-amber":"al-green"}"><div class="al-icon">${s.daysLeft<=7?"&#9888;&#65039;":"&#128197;"}</div><div class="al-text">${st?st.name:"--"}<div class="al-sub">${s.remaining.toFixed(1)}h left - ${fmt(s.end)} (${s.daysLeft}d)</div></div></div>`;
   }).join(""):`<div style="font-size:13px;color:var(--soft);padding:6px 0">Nothing expiring soon.</div>`;
+  // Upcoming sessions
+  const upcoming=[...(db.events||[])].filter(e=>e.date>=today()&&!e.logged).sort((a,b)=>a.date.localeCompare(b.date)||((a.time||"").localeCompare(b.time||"")));
+  const upEl=document.getElementById("d-upcoming");
+  if(upEl){
+    if(!upcoming.length){upEl.innerHTML=`<div style="font-size:13px;color:var(--soft);padding:8px 0">No upcoming sessions scheduled.</div>`;}
+    else{upEl.innerHTML=upcoming.slice(0,5).map(ev=>{
+      const st=db.students.find(x=>x.id===ev.studentId);
+      const p=st&&st.profile?st.profile:{};
+      const meetLink=ev.meetLink||p.meetLink||"";
+      const meetLabel=p.meetLabel||"Meet";
+      return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f3f4f6;flex-wrap:wrap" onclick="openCalModal('${ev.id}',null)" style="cursor:pointer">
+        <div style="width:42px;height:42px;border-radius:50%;background:var(--navy);color:#fff;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${st?st.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase():"?"}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14px;color:var(--navy)">${st?st.name:"Unknown"}</div>
+          <div style="font-size:12px;color:var(--soft)">${fmt(ev.date)}${ev.time?" at "+ev.time:""} · ${ev.hours||1}h${ev.notes?" · "+ev.notes.slice(0,30):""}</div>
+        </div>
+        ${meetLink?`<a href="${meetLink}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sm" style="background:#e8f5e9;color:#2e7d32;border:1.5px solid #c8e6c9;text-decoration:none;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600">&#128222; ${meetLabel}</a>`:""}
+      </div>`;
+    }).join("")+(upcoming.length>5?`<div style="font-size:12px;color:var(--navy);font-weight:600;padding-top:8px;text-align:center">+${upcoming.length-5} more · click to view calendar</div>`:"");}
+  }
+
   const recent=[...db.sessions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
   document.getElementById("d-recent").innerHTML=recent.map(s=>{
     const st=db.students.find(x=>x.id===s.studentId);
@@ -599,7 +631,7 @@ function buildDetail(s){
     [...pkgs].reverse().map((pkg,i)=>{
       const st=pkgStats(pkg),pct=Math.round(st.used/st.total*100);
       const barColor=st.remaining<=1?"var(--red)":st.remaining<=3?"var(--amber)":"var(--navy)";
-      return `<div class="pkg-card${st.expired&&i>0?" expired":""}"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-weight:700;font-size:15px;color:var(--navy)">${i===0?"Current Package":"Previous Package"}</span><span>${sBadge(st.action)}</span></div><div style="display:flex;flex-wrap:wrap;gap:14px;font-size:14px;margin-bottom:12px"><div><span style="color:var(--soft)">Size:</span> <strong>${pkg.size}h${st.roll>0?" + "+st.roll.toFixed(1)+"h rollover":""}</strong></div><div><span style="color:var(--soft)">Price:</span> <strong>$${pkg.price}</strong></div><div><span style="color:var(--soft)">Paid:</span> <strong style="color:${pkg.paid==="Yes"?"var(--green)":"var(--red)"}">${pkg.paid}</strong></div><div><span style="color:var(--soft)">Start:</span> <strong>${fmt(pkg.start)}</strong></div><div><span style="color:var(--soft)">Expires:</span> <strong>${fmt(st.end)}</strong></div></div><div class="hour-track" style="height:8px"><div class="hour-fill" style="width:${pct}%;background:${barColor};height:8px;border-radius:99px"></div></div><div class="hour-lbl"><span>${st.used}h used</span><span><strong>${st.remaining.toFixed(1)}h remaining</strong> of ${st.total.toFixed(1)}h</span></div>${pkg.notes?`<div style="font-size:12px;color:var(--soft);margin-top:8px">${pkg.notes}</div>`:""}</div>`;
+      return `<div class="pkg-card${st.expired&&i>0?" expired":""}"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-weight:700;font-size:15px;color:var(--navy)">${i===0?"Current Package":"Previous Package"}</span><div style="display:flex;align-items:center;gap:8px"><span>${sBadge(st.action)}</span><button class="btn-icon btn-sm" onclick="openEditPackage('${pkg.id}')" title="Edit package">&#9998;</button></div></div><div style="display:flex;flex-wrap:wrap;gap:14px;font-size:14px;margin-bottom:12px"><div><span style="color:var(--soft)">Size:</span> <strong>${pkg.size}h${st.roll>0?" + "+st.roll.toFixed(1)+"h rollover":""}</strong></div><div><span style="color:var(--soft)">Price:</span> <strong>$${pkg.price}</strong></div><div><span style="color:var(--soft)">Paid:</span> <strong style="color:${pkg.paid==="Yes"?"var(--green)":"var(--red)"}">${pkg.paid}</strong></div><div><span style="color:var(--soft)">Start:</span> <strong>${fmt(pkg.start)}</strong></div><div><span style="color:var(--soft)">Expires:</span> <strong>${fmt(st.end)}</strong></div></div><div class="hour-track" style="height:8px"><div class="hour-fill" style="width:${pct}%;background:${barColor};height:8px;border-radius:99px"></div></div><div class="hour-lbl"><span>${st.used}h used</span><span><strong>${st.remaining.toFixed(1)}h remaining</strong> of ${st.total.toFixed(1)}h</span></div>${pkg.notes?`<div style="font-size:12px;color:var(--soft);margin-top:8px">${pkg.notes}</div>`:""}</div>`;
     }).join("");
 
   function prow(label,val){
@@ -678,7 +710,7 @@ function buildDetail(s){
   const docs=s.docs||[];
   const docsHTML=docs.map(d=>`<div class="doc-item" onclick="openDoc('${d.id}','${s.id}')"><span style="font-size:22px">${docIcon(d.name)}</span><div style="flex:1;min-width:0"><div class="doc-name">${d.name}</div><div style="font-size:11px;color:var(--soft)">${d.size} - ${d.date}</div></div><button class="btn-icon" title="Download" onclick="event.stopPropagation();openDoc('${d.id}','${s.id}')">&#11015;&#65039;</button><button class="btn-icon" onclick="event.stopPropagation();deleteDoc('${s.id}','${d.id}')">&#128465;&#65039;</button></div>`).join("")+`<label class="upload-zone" for="up-${s.id}">&#128206; Click to upload documents or contracts</label><input type="file" id="up-${s.id}" style="display:none" multiple onchange="handleUpload('${s.id}',this)"/>`;
 
-  return `<div style="margin-bottom:16px"><button class="btn btn-secondary btn-sm" onclick="showList();renderList()">&#8592; Back</button></div><div class="card"><div class="detail-hd"><div class="detail-av">${init}</div><div><div class="detail-name">${s.name}</div><div class="detail-sub">Gr. ${s.grade} - ${s.subject} - ${s.contact||"No contact"}</div></div><div class="detail-acts">${p.classroomLink?`<a href="${p.classroomLink}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none">&#127979; Classroom</a>`:""} ${p.meetLink?`<a href="${p.meetLink}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;background:#e8f5e9;color:#2e7d32;border-color:#c8e6c9">${p.meetLabel||"Meet"} &#128222;</a>`:""}<button class="btn btn-secondary btn-sm" onclick="openEditProfile('${s.id}')">&#9998; Edit Profile</button><button class="btn btn-secondary btn-sm" onclick="openLogSession('${s.id}')">+ Log Session</button><button class="btn btn-primary btn-sm" onclick="openRenew('${s.id}')">&#128260; Renew</button><button class="btn btn-secondary btn-sm" onclick="toggleArchive('${s.id}')">${s.archived?"Unarchive":"Archive"}</button><button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button></div></div><div class="stat-grid" style="margin-bottom:0"><div class="stat-card c-navy"><div class="stat-label">Total Sessions</div><div class="stat-value">${sessions.length}</div></div><div class="stat-card c-green"><div class="stat-label">Total Hours</div><div class="stat-value">${h.total}</div></div><div class="stat-card c-blue"><div class="stat-label">Hours Left</div><div class="stat-value">${h.remaining.toFixed(1)}</div><div class="stat-sub">current package</div></div><div class="stat-card c-amber"><div class="stat-label">Onboarding</div><div class="stat-value">${clP.pct}%</div><div class="stat-sub">${clP.done}/${clP.total} done</div></div><div class="stat-card c-purple" style="border-left:4px solid var(--purple)"><div class="stat-label">Upcoming</div><div class="stat-value">${(db.events||[]).filter(e=>e.studentId===s.id&&e.date>=today()&&!e.logged).length}</div><div class="stat-sub">scheduled sessions</div></div></div></div><div class="tabs" id="dtabs-${s.id}"><div class="tab active" onclick="switchTab('${s.id}','packages',this)">&#128230; Package</div><div class="tab" onclick="switchTab('${s.id}','sessions',this)">&#128221; Sessions</div><div class="tab" onclick="switchTab('${s.id}','profile',this)">&#128100; Profile</div><div class="tab" onclick="switchTab('${s.id}','checklist',this)">&#9989; Onboarding</div><div class="tab" onclick="switchTab('${s.id}','docs',this)">&#128193; Documents</div></div><div id="dt-packages-${s.id}">${pkgHTML}</div><div id="dt-sessions-${s.id}" style="display:none"><div class="card">${sessions.length===0?`<div class="empty"><p>No sessions yet.</p></div>`:`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Hours</th><th>Notes</th><th></th></tr></thead><tbody>${sessions.map(ss=>`<tr><td>${fmt(ss.date)}</td><td><strong>${ss.hours}h</strong></td><td style="color:var(--soft);font-size:13px;max-width:280px">${ss.notes||"--"}</td><td><button class="btn-icon" onclick="delSession('${ss.id}','${s.id}')">&#128465;&#65039;</button></td></tr>`).join("")}</tbody></table></div>`}</div></div><div id="dt-profile-${s.id}" style="display:none"><div class="card">${profHTML}</div></div><div id="dt-checklist-${s.id}" style="display:none"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div><strong>${clP.done}/${clP.total}</strong> items complete</div>${clP.done===clP.total?`<span class="badge b-green">&#127881; Fully onboarded!</span>`:""}</div>${clHTML}</div></div><div id="dt-docs-${s.id}" style="display:none"><div class="card">${docsHTML}</div></div>`;
+  return `<div style="margin-bottom:16px"><button class="btn btn-secondary btn-sm" onclick="showList();renderList()">&#8592; Back</button></div><div class="card"><div class="detail-hd"><div class="detail-av">${init}</div><div><div class="detail-name">${s.name}</div><div class="detail-sub">Gr. ${s.grade} - ${s.subject} - ${s.contact||"No contact"}</div></div><div class="detail-acts">${p.classroomLink?`<a href="${p.classroomLink}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none">&#127979; Classroom</a>`:""} ${p.meetLink?`<a href="${p.meetLink}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;background:#e8f5e9;color:#2e7d32;border-color:#c8e6c9">${p.meetLabel||"Meet"} &#128222;</a>`:""}<button class="btn btn-secondary btn-sm" onclick="openEditProfile('${s.id}')">&#9998; Edit Profile</button><button class="btn btn-secondary btn-sm" onclick="openLogSession('${s.id}')">+ Log Session</button><button class="btn btn-primary btn-sm" onclick="openRenew('${s.id}')">&#128260; Renew</button><button class="btn btn-secondary btn-sm" onclick="toggleArchive('${s.id}')">${s.archived?"Unarchive":"Archive"}</button><button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button></div></div><div class="stat-grid" style="margin-bottom:0"><div class="stat-card c-navy"><div class="stat-label">Total Sessions</div><div class="stat-value">${sessions.length}</div></div><div class="stat-card c-green"><div class="stat-label">Total Hours</div><div class="stat-value">${h.total}</div></div><div class="stat-card c-blue"><div class="stat-label">Hours Left</div><div class="stat-value">${h.remaining.toFixed(1)}</div><div class="stat-sub">current package</div></div><div class="stat-card c-amber"><div class="stat-label">Onboarding</div><div class="stat-value">${clP.pct}%</div><div class="stat-sub">${clP.done}/${clP.total} done</div></div><div class="stat-card c-purple" style="border-left:4px solid var(--purple)"><div class="stat-label">Upcoming</div><div class="stat-value">${(db.events||[]).filter(e=>e.studentId===s.id&&e.date>=today()&&!e.logged).length}</div><div class="stat-sub">scheduled sessions</div></div></div></div><div class="tabs" id="dtabs-${s.id}"><div class="tab active" onclick="switchTab('${s.id}','packages',this)">&#128230; Package</div><div class="tab" onclick="switchTab('${s.id}','sessions',this)">&#128221; Sessions</div><div class="tab" onclick="switchTab('${s.id}','profile',this)">&#128100; Profile</div><div class="tab" onclick="switchTab('${s.id}','checklist',this)">&#9989; Onboarding</div><div class="tab" onclick="switchTab('${s.id}','docs',this)">&#128193; Documents</div></div><div id="dt-packages-${s.id}">${pkgHTML}</div><div id="dt-sessions-${s.id}" style="display:none"><div class="card">${sessions.length===0?`<div class="empty"><p>No sessions yet.</p></div>`:`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Hours</th><th>Notes</th><th></th></tr></thead><tbody>${sessions.map(ss=>`<tr><td>${fmt(ss.date)}</td><td><strong>${ss.hours}h</strong></td><td style="color:var(--soft);font-size:13px;max-width:280px">${ss.notes||"--"}</td><td style="white-space:nowrap"><button class="btn-icon" onclick="editSession('${ss.id}')" title="Edit">&#9998;</button><button class="btn-icon" onclick="delSession('${ss.id}','${s.id}')" title="Delete">&#128465;&#65039;</button></td></tr>`).join("")}</tbody></table></div>`}</div></div><div id="dt-profile-${s.id}" style="display:none"><div class="card">${profHTML}</div></div><div id="dt-checklist-${s.id}" style="display:none"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div><strong>${clP.done}/${clP.total}</strong> items complete</div>${clP.done===clP.total?`<span class="badge b-green">&#127881; Fully onboarded!</span>`:""}</div>${clHTML}</div></div><div id="dt-docs-${s.id}" style="display:none"><div class="card">${docsHTML}</div></div>`;
 }
 
 function switchTab(sid,tab,el){
@@ -824,7 +856,7 @@ function renderSessions(){
   if(!sessions.length){tbody.innerHTML="<tr><td colspan='5' style='text-align:center;color:var(--soft);padding:30px'>No sessions found.</td></tr>";return;}
   tbody.innerHTML=sessions.map(s=>{
     const st=db.students.find(x=>x.id===s.studentId);
-    return `<tr><td>${fmt(s.date)}</td><td><strong>${st?st.name:"--"}</strong></td><td><strong>${s.hours}h</strong></td><td style="color:var(--soft);font-size:13px;max-width:260px">${s.notes||"--"}</td><td><button class="btn-icon" onclick="delSession('${s.id}',null)">&#128465;&#65039;</button></td></tr>`;
+    return `<tr><td>${fmt(s.date)}</td><td><strong>${st?st.name:"--"}</strong></td><td><strong>${s.hours}h</strong></td><td style="color:var(--soft);font-size:13px;max-width:260px">${s.notes||"--"}</td><td style="white-space:nowrap"><button class="btn-icon" onclick="editSession('${s.id}')" title="Edit">&#9998;</button><button class="btn-icon" onclick="delSession('${s.id}',null)">&#128465;&#65039;</button></td></tr>`;
   }).join("");
 }
 function clearFilters(){document.getElementById("f-fs").value="";document.getElementById("f-ff").value="";document.getElementById("f-ft").value="";renderSessions();}
@@ -1145,6 +1177,408 @@ function saveEditProfile(){
   showToast("Profile saved!");
 }
 
+
+// ── BACKUP & RESTORE ──────────────────────────────────────────────────────────
+const BACKUP_KEY='ct_last_backup';
+const BACKUP_HIST_KEY='ct_backup_history';
+
+function exportForGithub(){
+  // Get the current HTML of this page
+  const currentHTML=document.documentElement.outerHTML;
+  // Inject the current db into the HTML so data is baked in
+  const dbJSON=JSON.stringify(db);
+  // Replace the SEED constant with current data so it loads with all student data
+  const updated=currentHTML.replace(
+    /const SEED=\{[\s\S]*?\};(\s*function loadDB)/,
+    "const SEED="+dbJSON+";$1"
+  );
+  const blob=new Blob([updated],{type:"text/html"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;a.download="index.html";
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  // Save last backup date
+  localStorage.setItem(BACKUP_KEY,new Date().toISOString());
+  const hist=JSON.parse(localStorage.getItem(BACKUP_HIST_KEY)||"[]");
+  hist.unshift({date:new Date().toISOString(),students:db.students.length,sessions:db.sessions.length});
+  if(hist.length>10)hist.pop();
+  localStorage.setItem(BACKUP_HIST_KEY,JSON.stringify(hist));
+  hideBanner();
+  showToast("index.html downloaded! Upload it to GitHub to go live.");
+  renderBackupHistory();
+}
+
+function exportBackup(){
+  // Get the current page HTML
+  const currentHTML=document.documentElement.outerHTML;
+  // Replace the SEED constant with current db data so it's baked in
+  const dbJson=JSON.stringify(db);
+  // Inject current db as the seed so when uploaded to GitHub, data is pre-loaded
+  const updatedHTML=currentHTML.replace(
+    /const SEED=\{[\s\S]*?\};(\s*function loadDB)/,
+    'const SEED='+dbJson+';$1'
+  );
+  const blob=new Blob([updatedHTML],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='index.html';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  // Save last backup date
+  localStorage.setItem(BACKUP_KEY,new Date().toISOString());
+  const hist=JSON.parse(localStorage.getItem(BACKUP_HIST_KEY)||'[]');
+  hist.unshift({date:new Date().toISOString(),students:db.students.length,sessions:db.sessions.length});
+  if(hist.length>10)hist.pop();
+  localStorage.setItem(BACKUP_HIST_KEY,JSON.stringify(hist));
+  hideBanner();
+  showToast('index.html downloaded! Upload directly to GitHub.');
+  renderBackupHistory();
+}
+
+function importBackup(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!data.db||!data.db.students){showToast('Invalid backup file');return;}
+      if(!confirm('This will replace ALL your current data with the backup from '+new Date(data.exportDate).toLocaleDateString()+'. Are you sure?'))return;
+      db=data.db;
+      saveDB();
+      renderDash();renderList();
+      const status=document.getElementById('backup-status');
+      if(status){status.style.display='block';status.textContent='Backup restored successfully! '+db.students.length+' students, '+db.sessions.length+' sessions loaded.';}
+      showToast('Backup restored successfully!');
+    }catch(err){showToast('Could not read backup file. Make sure it is a valid backup.');}
+  };
+  reader.readAsText(file);
+}
+
+function renderBackupHistory(){
+  const el=document.getElementById('backup-history-list');if(!el)return;
+  const hist=JSON.parse(localStorage.getItem(BACKUP_HIST_KEY)||'[]');
+  const last=localStorage.getItem(BACKUP_KEY);
+  if(!hist.length){
+    el.innerHTML='<div style="font-size:13px;color:var(--soft);padding:8px 0">No backups downloaded yet. Download your first backup above!</div>';
+    return;
+  }
+  el.innerHTML='<div style="font-size:13px;color:var(--soft);margin-bottom:12px">Last '+hist.length+' backups:</div>'+
+    hist.map((h,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f3f4f6">
+      <div>
+        <div style="font-weight:600;font-size:14px">${i===0?"Latest backup":"Backup"} — ${new Date(h.date).toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'})}</div>
+        <div style="font-size:12px;color:var(--soft)">${h.students} students · ${h.sessions} sessions</div>
+      </div>
+      <span class="badge ${i===0?'b-green':'b-gray'}">${i===0?'Most Recent':'Older'}</span>
+    </div>`).join('');
+}
+
+function checkBackupReminder(){
+  const last=localStorage.getItem(BACKUP_KEY);
+  const banner=document.getElementById('backup-banner');
+  if(!banner)return;
+  if(!last){
+    // Never backed up - show after 3 days of use
+    const firstUse=localStorage.getItem('ct_first_use');
+    if(!firstUse){localStorage.setItem('ct_first_use',new Date().toISOString());return;}
+    const daysSince=daysBetween(firstUse.slice(0,10),today());
+    if(daysSince>=3)banner.style.display='flex';
+  } else {
+    const daysSince=daysBetween(last.slice(0,10),today());
+    if(daysSince>=7)banner.style.display='flex';
+    else banner.style.display='none';
+  }
+}
+
+function hideBanner(){
+  const banner=document.getElementById('backup-banner');
+  if(banner)banner.style.display='none';
+}
+
+// Check reminder on load and every hour
+setTimeout(checkBackupReminder,2000);
+setInterval(checkBackupReminder,3600000);
+
+
+
+// ── EDIT SESSION ─────────────────────────────────────────────────────────────
+let editSessId=null;
+function editSession(sessId){
+  editSessId=sessId;
+  const sess=db.sessions.find(s=>s.id===sessId);if(!sess)return;
+  const sel=document.getElementById("ss-student");
+  sel.innerHTML="<option value=''>- Select student -</option>"+db.students.filter(s=>!s.archived).map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
+  sel.value=sess.studentId;
+  document.getElementById("ss-date").value=sess.date;
+  document.getElementById("ss-hours").value=sess.hours;
+  document.getElementById("ss-notes").value=sess.notes||"";
+  document.getElementById("ss-warn").style.display="none";
+  openModal("m-session");
+}
+
+// Override saveSession to handle edit
+const _origSaveSession=saveSession;
+function saveSession(){
+  if(editSessId){
+    const sid=document.getElementById("ss-student").value;
+    const date=document.getElementById("ss-date").value;
+    const hours=parseFloat(document.getElementById("ss-hours").value);
+    if(!sid||!date||!hours){showToast("Student, date and hours required");return;}
+    const idx=db.sessions.findIndex(s=>s.id===editSessId);
+    if(idx>=0){db.sessions[idx]={...db.sessions[idx],studentId:sid,date,hours,notes:document.getElementById("ss-notes").value.trim()};}
+    saveDB();closeModal("m-session");editSessId=null;
+    if(sessSid)showDetail(sessSid);else renderSessions();
+    renderDash();renderList();showToast("Session updated!");
+  } else {
+    editSessId=null;_origSaveSession();
+  }
+}
+
+// ── EDIT PACKAGE ─────────────────────────────────────────────────────────────
+let editPkgId=null;
+function openEditPackage(pkgId){
+  editPkgId=pkgId;
+  const pkg=db.packages.find(p=>p.id===pkgId);if(!pkg)return;
+  document.getElementById("rn-label").textContent="Editing package for: "+
+    (db.students.find(s=>s.id===pkg.studentId)?.name||"");
+  document.getElementById("rn-size").value=pkg.size;
+  document.getElementById("rn-price").value=pkg.price;
+  document.getElementById("rn-date").value=pkg.start;
+  document.getElementById("rn-paid").value=pkg.paid;
+  document.getElementById("rn-notes").value=pkg.notes||"";
+  document.getElementById("rn-info").style.display="none";
+  openModal("m-renew");
+}
+
+const _origSaveRenewal=saveRenewal;
+function saveRenewal(){
+  if(editPkgId){
+    const pkg=db.packages.find(p=>p.id===editPkgId);if(!pkg)return;
+    const size=parseFloat(document.getElementById("rn-size").value);
+    const date=document.getElementById("rn-date").value;
+    if(!size||!date){showToast("Hours and date required");return;}
+    pkg.size=size;pkg.price=parseFloat(document.getElementById("rn-price").value)||0;
+    pkg.start=date;pkg.paid=document.getElementById("rn-paid").value;
+    pkg.notes=document.getElementById("rn-notes").value.trim();
+    saveDB();closeModal("m-renew");editPkgId=null;
+    showDetail(pkg.studentId);renderDash();showToast("Package updated!");
+  } else {
+    editPkgId=null;_origSaveRenewal();
+  }
+}
+
+// ── MEET LINKS TRACKER ───────────────────────────────────────────────────────
+function getAllMeetLinks(sid){
+  const links=[];
+  const s=db.students.find(x=>x.id===sid);
+  const p=s&&s.profile?s.profile:{};
+  if(p.meetLink)links.push({label:p.meetLabel||"Default Meet",url:p.meetLink,source:"Profile",date:""});
+  (db.events||[]).filter(e=>e.studentId===sid&&e.meetLink).forEach(ev=>{
+    links.push({label:p.meetLabel||"Meet",url:ev.meetLink,source:fmt(ev.date)+(ev.time?" at "+ev.time:""),date:ev.date});
+  });
+  return links;
+}
+
+// ── LEADS ─────────────────────────────────────────────────────────────────────
+if(!db.leads)db.leads=[];
+if(!db.leadCounter)db.leadCounter=1;
+let leadTab="all";
+let editLeadId=null;
+
+const LEAD_STATUS_MAP={
+  new:{label:"New Inquiry",badge:"b-blue",color:"var(--blue)"},
+  contacted:{label:"Contacted",badge:"b-amber",color:"var(--amber)"},
+  consultation:{label:"Consultation Sent",badge:"b-purple",color:"var(--purple)"},
+  converted:{label:"Converted",badge:"b-green",color:"var(--green)"},
+  lost:{label:"Lost",badge:"b-gray",color:"var(--soft)"},
+};
+
+function setLeadTab(tab,el){
+  leadTab=tab;
+  document.querySelectorAll("#page-leads .btn").forEach(b=>{ b.style.background=""; b.style.color=""; b.className="btn btn-secondary btn-sm"; });
+  el.style.background="var(--navy)";el.style.color="#fff";el.className="btn btn-sm";
+  renderLeads();
+}
+
+function renderLeads(){
+  const el=document.getElementById("leads-list");if(!el)return;
+  let leads=[...db.leads||[]];
+  if(leadTab!=="all")leads=leads.filter(l=>l.status===leadTab);
+  leads.sort((a,b)=>b.date.localeCompare(a.date));
+  if(!leads.length){
+    el.innerHTML=`<div class="empty"><div class="empty-icon">&#128233;</div><p>No leads here yet. Add your first one!</p></div>`;
+    return;
+  }
+  el.innerHTML=leads.map(l=>{
+    const sm=LEAD_STATUS_MAP[l.status]||LEAD_STATUS_MAP.new;
+    const checks=[l.formFilled,l.emailSent,l.meetSent,l.consultDone,l.followUp,l.proposalSent];
+    const done=checks.filter(Boolean).length;
+    return `<div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 1px 5px rgba(0,0,0,.07);margin-bottom:12px;border:1.5px solid var(--border)">
+      <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+        <div style="width:48px;height:48px;border-radius:50%;background:${sm.color};color:#fff;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${l.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div style="font-weight:700;font-size:16px;color:var(--navy)">${l.name}</div>
+            <span class="badge ${sm.badge}">${sm.label}</span>
+          </div>
+          <div style="font-size:13px;color:var(--soft);margin-top:3px">${l.studentName?" For: "+l.studentName+" · ":""}${l.grade||""} ${l.email?" · "+l.email:""}</div>
+          <div style="font-size:12px;color:var(--soft);margin-top:2px">${l.source?" Source: "+l.source:""} ${l.date?" · "+fmt(l.date):""}</div>
+          <div style="margin-top:10px">
+            <div style="font-size:12px;color:var(--soft);margin-bottom:6px">Progress: ${done}/6</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              ${[["formFilled","Intake Form"],["emailSent","Email Sent"],["meetSent","Consult Link"],["consultDone","Consult Done"],["followUp","Follow-up"],["proposalSent","Pricing Sent"]].map(([key,label])=>
+                `<span style="padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;background:${l[key]?"var(--green-light)":"#f3f4f6"};color:${l[key]?"var(--green)":"var(--soft)"}">
+                  ${l[key]?"&#10003;":"&#9675;"} ${label}
+                </span>`).join("")}
+            </div>
+          </div>
+          ${l.notes?`<div style="font-size:13px;color:var(--soft);margin-top:10px;padding:8px 12px;background:#f9fafb;border-radius:8px">${l.notes}</div>`:""}
+          ${l.meetLink?`<div style="margin-top:10px"><a href="${l.meetLink}" target="_blank" class="btn btn-sm" style="background:#e8f5e9;color:#2e7d32;border:1.5px solid #c8e6c9;text-decoration:none;font-size:12px">&#128222; Open Consultation Link</a></div>`:""}
+          ${l.followupDate?`<div style="margin-top:8px;font-size:12px;color:var(--amber);font-weight:600">&#128197; Follow-up: ${fmt(l.followupDate)}</div>`:""}
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-secondary btn-sm" onclick="openEditLead('${l.id}')">&#9998; Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteLead('${l.id}')">&#128465;&#65039;</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function openAddLead(){
+  editLeadId=null;
+  document.getElementById("lead-modal-title").textContent="&#128233; Add Lead";
+  ["ld-name","ld-email","ld-phone","ld-student","ld-grade","ld-meetlink","ld-notes","ld-followup-date"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  document.getElementById("ld-date").value=today();
+  document.getElementById("ld-status").value="new";
+  document.getElementById("ld-source").value="";
+  ["ld-form-filled","ld-email-sent","ld-meet-sent","ld-consult-done","ld-follow-up","ld-proposal-sent"].forEach(id=>{const el=document.getElementById(id);if(el)el.checked=false;});
+  openModal("m-lead");
+}
+
+function openEditLead(id){
+  editLeadId=id;
+  const l=db.leads.find(x=>x.id===id);if(!l)return;
+  document.getElementById("lead-modal-title").textContent="&#9998; Edit Lead";
+  document.getElementById("ld-name").value=l.name||"";
+  document.getElementById("ld-email").value=l.email||"";
+  document.getElementById("ld-phone").value=l.phone||"";
+  document.getElementById("ld-student").value=l.studentName||"";
+  document.getElementById("ld-grade").value=l.grade||"";
+  document.getElementById("ld-status").value=l.status||"new";
+  document.getElementById("ld-source").value=l.source||"";
+  document.getElementById("ld-meetlink").value=l.meetLink||"";
+  document.getElementById("ld-notes").value=l.notes||"";
+  document.getElementById("ld-date").value=l.date||today();
+  document.getElementById("ld-followup-date").value=l.followupDate||"";
+  document.getElementById("ld-form-filled").checked=!!l.formFilled;
+  document.getElementById("ld-email-sent").checked=!!l.emailSent;
+  document.getElementById("ld-meet-sent").checked=!!l.meetSent;
+  document.getElementById("ld-consult-done").checked=!!l.consultDone;
+  document.getElementById("ld-follow-up").checked=!!l.followUp;
+  document.getElementById("ld-proposal-sent").checked=!!l.proposalSent;
+  openModal("m-lead");
+}
+
+function saveLead(){
+  const name=document.getElementById("ld-name").value.trim();
+  if(!name){showToast("Name is required");return;}
+  const lead={
+    id:editLeadId||(("ld"+(db.leadCounter++))),
+    name,email:document.getElementById("ld-email").value.trim(),
+    phone:document.getElementById("ld-phone").value.trim(),
+    studentName:document.getElementById("ld-student").value.trim(),
+    grade:document.getElementById("ld-grade").value.trim(),
+    status:document.getElementById("ld-status").value,
+    source:document.getElementById("ld-source").value,
+    meetLink:document.getElementById("ld-meetlink").value.trim(),
+    notes:document.getElementById("ld-notes").value.trim(),
+    date:document.getElementById("ld-date").value||today(),
+    followupDate:document.getElementById("ld-followup-date").value,
+    formFilled:document.getElementById("ld-form-filled").checked,
+    emailSent:document.getElementById("ld-email-sent").checked,
+    meetSent:document.getElementById("ld-meet-sent").checked,
+    consultDone:document.getElementById("ld-consult-done").checked,
+    followUp:document.getElementById("ld-follow-up").checked,
+    proposalSent:document.getElementById("ld-proposal-sent").checked,
+  };
+  if(editLeadId){const idx=db.leads.findIndex(l=>l.id===editLeadId);if(idx>=0)db.leads[idx]=lead;else db.leads.push(lead);}
+  else db.leads.push(lead);
+  saveDB();closeModal("m-lead");renderLeads();showToast(editLeadId?"Lead updated!":"Lead added!");editLeadId=null;
+}
+
+function deleteLead(id){
+  if(!confirm("Delete this lead?"))return;
+  db.leads=db.leads.filter(l=>l.id!==id);
+  saveDB();renderLeads();showToast("Lead deleted");
+}
+
+// Fix Add Lead button to call openAddLead
+document.querySelector("#page-leads .btn-primary").addEventListener("click",openAddLead);
+
+// ── DAY VIEW CALENDAR (hour grid) ─────────────────────────────────────────────
+function showDayView(dateStr){
+  const view=document.getElementById("cal-day-view");
+  const title=document.getElementById("cal-day-title");
+  const eventsEl=document.getElementById("cal-day-events");
+  view.style.display="block";
+  const d=new Date(dateStr+"T00:00:00");
+  title.textContent=d.toLocaleDateString("en-CA",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+  const scheduled=(db.events||[]).filter(e=>e.date===dateStr).sort((a,b)=>(a.time||"00:00").localeCompare(b.time||"00:00"));
+  const logged=db.sessions.filter(s=>s.date===dateStr&&!(db.events||[]).find(e=>e.sessionId===s.id));
+
+  // Hour grid from 7am to 10pm
+  const hours=[];
+  for(let h=7;h<=22;h++)hours.push(h);
+
+  function timeToMins(t){if(!t)return null;const[hh,mm]=t.split(":").map(Number);return hh*60+(mm||0);}
+
+  let html=`<div style="display:grid;grid-template-columns:52px 1fr;gap:0;border:1px solid var(--border);border-radius:12px;overflow:hidden">`;
+  hours.forEach(h=>{
+    const timeStr=h+":00";
+    const hMins=h*60;
+    const eventsThisHour=scheduled.filter(ev=>{
+      const t=timeToMins(ev.time);
+      return t!==null&&t>=hMins&&t<hMins+60;
+    });
+    const loggedThisHour=logged.filter(sess=>{return false;}); // logged sessions have no time
+    const isNowHour=new Date().getHours()===h&&dateStr===today();
+    html+=`<div style="padding:8px 6px;text-align:right;font-size:11px;font-weight:600;color:var(--soft);border-bottom:1px solid #f3f4f6;border-right:1px solid #f3f4f6;background:${isNowHour?"var(--navy-light)":"#fafafa"}">${h>12?h-12:h}${h>=12?"pm":"am"}</div>`;
+    html+=`<div style="padding:4px 8px;border-bottom:1px solid #f3f4f6;min-height:48px;background:${isNowHour?"var(--navy-light)":"#fff"}">`;
+    eventsThisHour.forEach(ev=>{
+      const st=db.students.find(s=>s.id===ev.studentId);
+      const p=st&&st.profile?st.profile:{};
+      const meetLink=ev.meetLink||p.meetLink||"";
+      const meetLabel=p.meetLabel||"Meet";
+      html+=`<div style="background:${ev.logged?"var(--green)":"var(--navy)"};color:#fff;border-radius:8px;padding:6px 10px;margin:2px 0;cursor:pointer;font-size:13px" onclick="openCalModal('${ev.id}',null)">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <strong>${ev.time||""} ${st?st.name:"?"}</strong>
+          <span style="opacity:.85;font-size:12px">${ev.hours||1}h${ev.notes?" · "+ev.notes.slice(0,30):""}</span>
+          ${meetLink?`<a href="${meetLink}" target="_blank" onclick="event.stopPropagation()" style="background:rgba(255,255,255,.2);color:#fff;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid rgba(255,255,255,.3)">&#128222; ${meetLabel}</a>`:""}
+          ${ev.logged?`<span style="opacity:.8;font-size:11px">&#10003; Done</span>`:`<span style="opacity:.7;font-size:11px;cursor:pointer" onclick="event.stopPropagation();markDone('${ev.id}')">Mark Done</span>`}
+        </div>
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+  // Show logged sessions without time at top
+  if(logged.length){
+    html=`<div style="margin-bottom:12px">${logged.map(sess=>{
+      const st=db.students.find(s=>s.id===sess.studentId);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--green-light);border-radius:10px;margin-bottom:6px;border-left:4px solid var(--green)">
+        <div style="font-size:18px">&#10003;</div>
+        <div><div style="font-weight:700;font-size:14px;color:var(--green)">${st?st.name:"?"} — ${sess.hours}h</div>
+        <div style="font-size:12px;color:var(--soft)">${sess.notes||"Session logged"}</div></div>
+      </div>`;
+    }).join("")}</div>`+html;
+  }
+  html+=`</div>`;
+  html+=`<div style="margin-top:12px;text-align:center"><button class="btn btn-primary btn-sm" onclick="openCalModal(null,'${dateStr}')">+ Add Session on this day</button></div>`;
+  eventsEl.innerHTML=html;
+}
+
+
 document.getElementById("fi-date").value=today();
 renderDash();
 </script>
@@ -1273,6 +1707,145 @@ renderDash();
     <button class="btn btn-primary" onclick="saveEditProfile()">Save Profile</button>
   </div>
 </div>
+</div>
+
+<!-- BACKUP REMINDER BANNER -->
+<div id="backup-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#2D3270;color:#fff;padding:14px 24px;z-index:2000;display:flex;align-items:center;gap:14px;box-shadow:0 -4px 20px rgba(0,0,0,.2)">
+  <span style="font-size:22px">&#128190;</span>
+  <div style="flex:1">
+    <div style="font-weight:700;font-size:14px">Weekly Backup Reminder</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:2px">It has been a week since your last backup. Download your data now to keep it safe!</div>
+  </div>
+  <button onclick="exportForGithub()" style="padding:10px 18px;border-radius:9px;border:none;background:#a5b4fc;color:#1e2250;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">&#11015;&#65039; Download index.html for GitHub</button>
+  <div style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap">Downloads index.html — upload straight to GitHub</div>
+</div>
+
+<!-- Leads Page -->
+<div class="page" id="page-leads">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <h2 style="font-size:24px;font-weight:800;color:var(--navy)">&#128233; Leads & Inquiries</h2>
+    <button class="btn btn-primary" onclick="openModal('m-lead')">+ Add Lead</button>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <button class="btn btn-sm" id="lead-tab-all" onclick="setLeadTab('all',this)" style="background:var(--navy);color:#fff">All</button>
+    <button class="btn btn-secondary btn-sm" id="lead-tab-new" onclick="setLeadTab('new',this)">New Inquiry</button>
+    <button class="btn btn-secondary btn-sm" id="lead-tab-contacted" onclick="setLeadTab('contacted',this)">Contacted</button>
+    <button class="btn btn-secondary btn-sm" id="lead-tab-consultation" onclick="setLeadTab('consultation',this)">Consultation Sent</button>
+    <button class="btn btn-secondary btn-sm" id="lead-tab-converted" onclick="setLeadTab('converted',this)">Converted</button>
+    <button class="btn btn-secondary btn-sm" id="lead-tab-lost" onclick="setLeadTab('lost',this)">Lost</button>
+  </div>
+  <div id="leads-list"></div>
+</div>
+
+<!-- Add/Edit Lead Modal -->
+<div class="overlay" id="m-lead">
+<div class="modal" style="max-width:600px">
+  <div class="modal-hd"><div class="modal-title" id="lead-modal-title">&#128233; Add Lead</div><button class="btn-icon" onclick="closeModal('m-lead')">&#10005;</button></div>
+  <div class="form-grid">
+    <div class="intake-sep form-full">&#128100; Contact Info</div>
+    <div class="field form-full"><label>Name *</label><input id="ld-name" placeholder="e.g. Jane Smith"/></div>
+    <div class="field"><label>Email</label><input id="ld-email" placeholder="jane@email.com"/></div>
+    <div class="field"><label>Phone</label><input id="ld-phone" placeholder="613-555-0100"/></div>
+    <div class="field"><label>Student Name</label><input id="ld-student" placeholder="Who is the tutoring for?"/></div>
+    <div class="field"><label>Grade / Subject</label><input id="ld-grade" placeholder="e.g. Gr. 10 Math"/></div>
+    <div class="intake-sep form-full">&#128203; Lead Status</div>
+    <div class="field form-full"><label>Status</label>
+      <select id="ld-status">
+        <option value="new">New Inquiry</option>
+        <option value="contacted">Contacted</option>
+        <option value="consultation">Consultation Sent</option>
+        <option value="converted">Converted to Student</option>
+        <option value="lost">Lost / No Response</option>
+      </select>
+    </div>
+    <div class="field form-full"><label>Source</label>
+      <select id="ld-source">
+        <option value="">Select...</option>
+        <option>Website Intake Form</option>
+        <option>Email Inquiry</option>
+        <option>Instagram / Social Media</option>
+        <option>Referral</option>
+        <option>Phone Call</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="intake-sep form-full">&#9989; Progress Checklist</div>
+    <div class="field form-full">
+      <div class="cb-grid" id="ld-cb-progress" style="flex-direction:column;gap:8px">
+        <label class="cb-label"><input type="checkbox" id="ld-form-filled"/> Intake form filled out</label>
+        <label class="cb-label"><input type="checkbox" id="ld-email-sent"/> Initial email sent</label>
+        <label class="cb-label"><input type="checkbox" id="ld-meet-sent"/> Free consultation link sent</label>
+        <label class="cb-label"><input type="checkbox" id="ld-consult-done"/> Free consultation completed</label>
+        <label class="cb-label"><input type="checkbox" id="ld-follow-up"/> Follow-up sent</label>
+        <label class="cb-label"><input type="checkbox" id="ld-proposal-sent"/> Pricing / proposal sent</label>
+      </div>
+    </div>
+    <div class="field form-full"><label>Consultation Meet Link</label><input id="ld-meetlink" placeholder="https://meet.google.com/..."/></div>
+    <div class="field form-full"><label>Notes</label><textarea id="ld-notes" placeholder="Any notes about this lead..."></textarea></div>
+    <div class="field"><label>Initial Contact Date</label><input id="ld-date" type="date"/></div>
+    <div class="field"><label>Follow-up Date</label><input id="ld-followup-date" type="date"/></div>
+  </div>
+  <div class="modal-ft">
+    <button class="btn btn-secondary" onclick="closeModal('m-lead')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveLead()">Save Lead</button>
+  </div>
+</div>
+</div>
+
+<!-- Settings Page -->
+<div class="page" id="page-settings">
+  <h2 style="font-size:24px;font-weight:800;color:var(--navy);margin-bottom:20px">&#9881;&#65039; Settings</h2>
+
+  <div class="card">
+    <div class="card-title">&#128190; Data Backup & Restore</div>
+    <p style="font-size:14px;color:var(--soft);margin-bottom:18px">Your CRM data is saved in this browser. Export a backup regularly so you never lose your students, sessions, or packages — even if your browser resets.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:20px">
+      <div style="background:var(--navy-light);border-radius:12px;padding:18px;border:1.5px solid var(--navy-mid)">
+        <div style="font-size:20px;margin-bottom:8px">&#128196;</div>
+        <div style="font-weight:700;font-size:15px;color:var(--navy);margin-bottom:6px">Export for GitHub</div>
+        <div style="font-size:13px;color:var(--soft);margin-bottom:14px">Downloads a complete <strong>index.html</strong> file with all your data baked in. Upload straight to GitHub to update your live CRM.</div>
+        <button class="btn btn-primary" onclick="exportForGithub()">&#11015;&#65039; Download index.html</button>
+      </div>
+      <div style="background:#f5f0ff;border-radius:12px;padding:18px;border:1.5px solid #ede9fe">
+        <div style="font-size:20px;margin-bottom:8px">&#11015;&#65039;</div>
+        <div style="font-weight:700;font-size:15px;color:var(--purple);margin-bottom:6px">Export Data Backup</div>
+        <div style="font-size:13px;color:var(--soft);margin-bottom:14px">Downloads your data as a JSON file. Save it to Google Drive or email it to yourself as a safety copy.</div>
+        <button class="btn" style="background:var(--purple);color:#fff" onclick="exportBackup()">&#11015;&#65039; Download Backup</button>
+      </div>
+      <div style="background:var(--green-light);border-radius:12px;padding:18px;border:1.5px solid #bbf7d0">
+        <div style="font-size:20px;margin-bottom:8px">&#11014;&#65039;</div>
+        <div style="font-weight:700;font-size:15px;color:var(--green);margin-bottom:6px">Restore from Backup</div>
+        <div style="font-size:13px;color:var(--soft);margin-bottom:14px">Upload a previously exported JSON backup to restore all your data. This will replace your current data.</div>
+        <label class="btn" style="background:var(--green);color:#fff;cursor:pointer;display:inline-block">
+          &#11014;&#65039; Upload Backup
+          <input type="file" accept=".json" onchange="importBackup(this)" style="display:none"/>
+        </label>
+      </div>
+    </div>
+
+    <div id="backup-status" style="display:none;background:var(--green-light);border-radius:10px;padding:12px 16px;font-size:13px;font-weight:600;color:var(--green);margin-bottom:14px"></div>
+
+    <div style="background:#fffbeb;border-radius:10px;padding:14px 16px;border-left:4px solid var(--amber)">
+      <div style="font-weight:700;font-size:13px;color:var(--amber);margin-bottom:4px">&#9888;&#65039; Important</div>
+      <div style="font-size:13px;color:var(--soft)">Clearing your browser data, switching browsers, or using a different device will NOT have access to your data. Always keep a recent backup saved externally (Google Drive recommended).</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">&#128197; Backup History</div>
+    <div id="backup-history-list"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">&#127881; About</div>
+    <div style="font-size:14px;color:var(--soft);line-height:1.7">
+      <div><strong style="color:var(--navy)">Check Tutors CRM</strong></div>
+      <div>Built for Francesca at Check Tutors, Ottawa</div>
+      <div style="margin-top:8px">&#128231; payments@checktutors.com</div>
+      <div>&#127760; checktutors.com</div>
+    </div>
+  </div>
 </div>
 </body>
 </html>
