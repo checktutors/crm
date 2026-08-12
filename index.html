@@ -354,7 +354,7 @@ tr:hover td{background:#fafafa}
   <div id="ss-warn" style="display:none;background:var(--amber-light);border-radius:9px;padding:10px 14px;font-size:13px;color:var(--amber);margin-top:8px;font-weight:600"></div>
   <div class="modal-ft">
     <button class="btn btn-secondary" onclick="closeModal('m-session')">Cancel</button>
-    <button class="btn btn-primary" onclick="saveSession()">Log Session</button>
+    <button class="btn btn-primary" id="btn-save-session" onclick="saveSession()">Log Session</button>
   </div>
 </div>
 </div>
@@ -832,20 +832,25 @@ function onSessChange(){
   const sid=document.getElementById("ss-student").value,warn=document.getElementById("ss-warn");
   if(!sid){warn.style.display="none";return;}
   const pkg=activePkg(sid);
-  if(!pkg){warn.style.display="block";warn.textContent="No active package - renew first.";return;}
+  if(!pkg){
+    warn.style.display="block";
+    warn.style.background="var(--amber-light)";warn.style.color="var(--amber)";
+    warn.textContent="No active package - you can still log the session.";return;
+  }
   const st=pkgStats(pkg);
-  if(st.expired){warn.style.display="block";warn.textContent="Package expired - consider renewing.";return;}
-  if(st.remaining<=1){warn.style.display="block";warn.textContent="Only "+st.remaining+"h remaining!";return;}
+  if(st.expired){
+    warn.style.display="block";
+    warn.style.background="var(--amber-light)";warn.style.color="var(--amber)";
+    warn.textContent="Package expired - you can still log this session.";return;
+  }
+  if(st.remaining<=1){
+    warn.style.display="block";
+    warn.style.background="var(--amber-light)";warn.style.color="var(--amber)";
+    warn.textContent="Only "+st.remaining+"h remaining in current package.";return;
+  }
   warn.style.display="none";
 }
-function saveSession(){
-  const sid=document.getElementById("ss-student").value,date=document.getElementById("ss-date").value,hours=parseFloat(document.getElementById("ss-hours").value);
-  if(!sid||!date||!hours){showToast("Student, date and hours required");return;}
-  db.sessions.push({id:"ss"+(++db.counters.session),studentId:sid,date,hours,notes:document.getElementById("ss-notes").value.trim()});
-  saveDB();closeModal("m-session");
-  if(sessSid){showDetail(sessSid);}else{renderSessions();}
-  renderDash();renderList();showToast("Session logged!");
-}
+
 function renderSessions(){
   const sel=document.getElementById("f-fs"),cur=sel.value;
   sel.innerHTML="<option value=''>All Students</option>"+db.students.map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
@@ -1310,6 +1315,7 @@ let editSessId=null;
 function editSession(sessId){
   editSessId=sessId;
   const sess=db.sessions.find(s=>s.id===sessId);if(!sess)return;
+  sessSid=sess.studentId; // remember which student we came from
   const sel=document.getElementById("ss-student");
   sel.innerHTML="<option value=''>- Select student -</option>"+db.students.filter(s=>!s.archived).map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
   sel.value=sess.studentId;
@@ -1321,20 +1327,42 @@ function editSession(sessId){
 }
 
 // Override saveSession to handle edit
-const _origSaveSession=saveSession;
+// Unified saveSession handles both new and edit
 function saveSession(){
+  const sid=document.getElementById("ss-student").value;
+  const date=document.getElementById("ss-date").value;
+  const hours=parseFloat(document.getElementById("ss-hours").value);
+  if(!sid||!date||!hours){showToast("Student, date and hours required");return;}
+  const notes=document.getElementById("ss-notes").value.trim();
   if(editSessId){
-    const sid=document.getElementById("ss-student").value;
-    const date=document.getElementById("ss-date").value;
-    const hours=parseFloat(document.getElementById("ss-hours").value);
-    if(!sid||!date||!hours){showToast("Student, date and hours required");return;}
+    // Editing existing session
     const idx=db.sessions.findIndex(s=>s.id===editSessId);
-    if(idx>=0){db.sessions[idx]={...db.sessions[idx],studentId:sid,date,hours,notes:document.getElementById("ss-notes").value.trim()};}
-    saveDB();closeModal("m-session");editSessId=null;
-    if(sessSid)showDetail(sessSid);else renderSessions();
+    if(idx>=0){db.sessions[idx]={...db.sessions[idx],studentId:sid,date,hours,notes};}
+    editSessId=null;
+    saveDB();closeModal("m-session");
+    const returnSid=sessSid||sid;
+    if(returnSid){
+      showDetail(returnSid);
+      setTimeout(()=>{
+        const tabs=[...document.querySelectorAll("#dtabs-"+returnSid+" .tab")];
+        const sessTab=tabs.find(t=>t.textContent.includes("Session"));
+        if(sessTab)switchTab(returnSid,"sessions",sessTab);
+      },50);
+    } else renderSessions();
     renderDash();renderList();showToast("Session updated!");
   } else {
-    editSessId=null;_origSaveSession();
+    // Logging new session
+    db.sessions.push({id:"ss"+(++db.counters.session),studentId:sid,date,hours,notes});
+    saveDB();closeModal("m-session");
+    if(sessSid){
+      showDetail(sessSid);
+      setTimeout(()=>{
+        const tabs=[...document.querySelectorAll("#dtabs-"+sessSid+" .tab")];
+        const sessTab=tabs.find(t=>t.textContent.includes("Session"));
+        if(sessTab)switchTab(sessSid,"sessions",sessTab);
+      },50);
+    } else renderSessions();
+    renderDash();renderList();showToast("Session logged!");
   }
 }
 
@@ -1927,7 +1955,14 @@ function toggleDashUpcoming(){
 }
 
 document.getElementById("fi-date").value=today();
+// Render immediately then again after short delay to ensure DOM is ready
 renderDash();
+renderList();
+renderSessions();
+setTimeout(()=>{
+  renderDash();
+  renderList();
+},300);
 </script>
 
 <!-- Edit Profile Modal -->
