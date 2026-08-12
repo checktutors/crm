@@ -380,6 +380,7 @@ tr:hover td{background:#fafafa}
     <div class="field form-full"><label>Notes</label><textarea id="rn-notes" placeholder="Additional notes..."></textarea></div>
   </div>
   <div class="modal-ft">
+    <button class="btn btn-danger" id="btn-delete-pkg" style="display:none;margin-right:auto" onclick="deleteCurrentPackage()">Delete Package</button>
     <button class="btn btn-secondary" onclick="closeModal('m-renew')">Cancel</button>
     <button class="btn btn-primary" onclick="saveRenewal()">Save</button>
   </div>
@@ -1243,17 +1244,27 @@ function renderSessions(){
 function clearFilters(){document.getElementById("f-fs").value="";document.getElementById("f-ff").value="";document.getElementById("f-ft").value="";renderSessions();}
 function delSession(id,returnSid){
   if(!confirm("Delete this session?"))return;
-  db.sessions=db.sessions.filter(s=>s.id!==id);
+  // Also remove any linked calendar event
   db.events=(db.events||[]).filter(e=>e.sessionId!==id);
+  db.sessions=db.sessions.filter(s=>s.id!==id);
   saveDB();showToast("Session deleted");
-  if(returnSid)showDetail(returnSid);else renderSessions();
-  renderDash();renderList();
+  if(returnSid){
+    showDetail(returnSid);
+    setTimeout(()=>{
+      const tabs=[...document.querySelectorAll("#dtabs-"+returnSid+" .tab")];
+      const sessTab=tabs.find(t=>t.textContent.includes("Session"));
+      if(sessTab)switchTab(returnSid,"sessions",sessTab);
+    },50);
+  } else renderSessions();
+  renderCalendar();renderDash();renderList();
 }
 
 // ── PACKAGES ─────────────────────────────────────────────────────────────────
 let renewSid=null,editPkgId=null;
 function openRenew(sid){
   renewSid=sid;editPkgId=null;
+  const delBtn=document.getElementById("btn-delete-pkg");
+  if(delBtn)delBtn.style.display="none";
   const s=db.students.find(x=>x.id===sid);
   document.getElementById("rn-label").textContent="Student: "+s.name;
   document.getElementById("rn-date").value=today();
@@ -1267,6 +1278,8 @@ function openRenew(sid){
 }
 function openEditPackage(pkgId){
   editPkgId=pkgId;renewSid=null;
+  const delBtn=document.getElementById("btn-delete-pkg");
+  if(delBtn)delBtn.style.display="block";
   const pkg=db.packages.find(p=>p.id===pkgId);if(!pkg)return;
   document.getElementById("rn-label").textContent="Editing package for: "+(db.students.find(s=>s.id===pkg.studentId)||{}).name;
   document.getElementById("rn-size").value=pkg.size;
@@ -1276,6 +1289,20 @@ function openEditPackage(pkgId){
   document.getElementById("rn-notes").value=pkg.notes||"";
   document.getElementById("rn-info").style.display="none";
   openModal("m-renew");
+}
+function deleteCurrentPackage(){
+  if(!editPkgId)return;
+  const pkg=db.packages.find(p=>p.id===editPkgId);if(!pkg)return;
+  const st=db.students.find(s=>s.id===pkg.studentId);
+  if(!confirm("Delete this package for "+(st?st.name:"this student")+"? Sessions will not be deleted."))return;
+  // Update any package that references this one as prevId
+  db.packages.forEach(p=>{if(p.prevId===editPkgId)p.prevId=pkg.prevId||null;});
+  const sid=pkg.studentId;
+  db.packages=db.packages.filter(p=>p.id!==editPkgId);
+  editPkgId=null;
+  saveDB();closeModal("m-renew");
+  showDetail(sid);renderDash();renderList();
+  showToast("Package deleted!");
 }
 function saveRenewal(){
   const size=parseFloat(document.getElementById("rn-size").value),date=document.getElementById("rn-date").value;
@@ -1581,9 +1608,9 @@ function openCalModal(eventId,prefillDate){
 function deleteCurrentEvent(){
   if(!editEventId)return;
   if(!confirm("Delete this scheduled session?"))return;
-  // Also remove linked session if it was auto-logged
   const ev=(db.events||[]).find(e=>e.id===editEventId);
-  if(ev&&ev.sessionId&&ev.logged){
+  // Always remove linked session when deleting the event
+  if(ev&&ev.sessionId){
     db.sessions=db.sessions.filter(s=>s.id!==ev.sessionId);
   }
   db.events=(db.events||[]).filter(e=>e.id!==editEventId);
@@ -1598,21 +1625,89 @@ function saveCalEvent(){
   if(!studentId||!date){showToast("Student and date are required");return;}
   const hours=parseFloat(document.getElementById("ce-hours").value)||1;
   const logged=document.getElementById("ce-log").value==="logged";
-  const ev={id:editEventId||("ev"+(db.eventCounter++)),studentId,date,time:document.getElementById("ce-time").value,hours,notes:document.getElementById("ce-notes").value.trim(),meetLink:document.getElementById("ce-meetlink").value.trim(),logged};
-  if(!db.events)db.events=[];
-  if(editEventId){const idx=db.events.findIndex(e=>e.id===editEventId);if(idx>=0)db.events[idx]=ev;else db.events.push(ev);}
-  else db.events.push(ev);
-  if(logged&&!editEventId){db.sessions.push({id:"ss"+(++db.counters.session),studentId,date,hours,notes:ev.notes});ev.sessionId=db.sessions[db.sessions.length-1].id;}
-  saveDB();closeModal("m-cal-event");renderCalendar();renderDash();showToast(editEventId?"Session updated!":"Session scheduled!");
+  const notes=document.getElementById("ce-notes").value.trim();
+  const time=document.getElementById("ce-time").value;
+  const meetLink=document.getElementById("ce-meetlink").value.trim();
+
+  if(editEventId){
+    // EDITING existing event
+    const idx=(db.events||[]).findIndex(e=>e.id===editEventId);
+    const oldEv=idx>=0?db.events[idx]:null;
+    const wasLogged=oldEv?oldEv.logged:false;
+    const ev={id:editEventId,studentId,date,time,hours,notes,meetLink,logged,sessionId:oldEv?oldEv.sessionId:null};
+    if(idx>=0)db.events[idx]=ev;else{if(!db.events)db.events=[];db.events.push(ev);}
+
+    if(logged&&!wasLogged){
+      // Newly marked as logged - create session
+      const newSessId="ss"+(++db.counters.session);
+      db.sessions.push({id:newSessId,studentId,date,hours,notes,hasEvent:!!time});
+      db.events[idx>=0?idx:db.events.length-1].sessionId=newSessId;
+    } else if(!logged&&wasLogged&&oldEv&&oldEv.sessionId){
+      // Unmarked as logged - remove the linked session
+      db.sessions=db.sessions.filter(s=>s.id!==oldEv.sessionId);
+      db.events[idx>=0?idx:db.events.length-1].sessionId=null;
+    } else if(logged&&wasLogged&&oldEv&&oldEv.sessionId){
+      // Still logged - update the linked session details
+      const sessIdx=db.sessions.findIndex(s=>s.id===oldEv.sessionId);
+      if(sessIdx>=0)db.sessions[sessIdx]={...db.sessions[sessIdx],studentId,date,hours,notes,hasEvent:!!time};
+    }
+  } else {
+    // CREATING new event
+    const newEvId="ev"+(db.eventCounter++);
+    const ev={id:newEvId,studentId,date,time,hours,notes,meetLink,logged};
+    if(!db.events)db.events=[];
+    db.events.push(ev);
+    if(logged){
+      // Also log as a session immediately
+      const newSessId="ss"+(++db.counters.session);
+      db.sessions.push({id:newSessId,studentId,date,hours,notes,hasEvent:!!time});
+      db.events[db.events.length-1].sessionId=newSessId;
+    }
+  }
+
+  saveDB();closeModal("m-cal-event");
+  renderCalendar();renderDash();renderList();
+  if(detailSid)showDetail(detailSid);
+  showToast(editEventId?"Session updated!":"Session scheduled!");
+  editEventId=null;
 }
 function markDone(evId){
   const ev=(db.events||[]).find(e=>e.id===evId);if(!ev)return;
-  ev.logged=true;
-  db.sessions.push({id:"ss"+(++db.counters.session),studentId:ev.studentId,date:ev.date,hours:ev.hours||1,notes:ev.notes});
-  ev.sessionId=db.sessions[db.sessions.length-1].id;
-  saveDB();renderCalendar();renderDash();renderList();if(detailSid)showDetail(detailSid);showToast("Marked as done!");
+  if(ev.sessionId){
+    // Already has a linked session - just mark logged
+    ev.logged=true;
+    const sess=db.sessions.find(s=>s.id===ev.sessionId);
+    if(sess){sess.date=ev.date;sess.hours=ev.hours||1;sess.notes=ev.notes;sess.hasEvent=!!ev.time;}
+  } else {
+    // Create new session
+    ev.logged=true;
+    const newSessId="ss"+(++db.counters.session);
+    db.sessions.push({id:newSessId,studentId:ev.studentId,date:ev.date,hours:ev.hours||1,notes:ev.notes,hasEvent:!!ev.time});
+    ev.sessionId=newSessId;
+  }
+  saveDB();renderCalendar();renderDash();renderList();
+  if(detailSid){
+    showDetail(detailSid);
+    setTimeout(()=>{
+      const tabs=[...document.querySelectorAll("#dtabs-"+detailSid+" .tab")];
+      const upTab=tabs.find(t=>t.textContent.includes("Upcoming"));
+      if(upTab)switchTab(detailSid,"upcoming",upTab);
+    },50);
+  }
+  showToast("Marked as done!");
 }
-function deleteEvent(evId){if(!confirm("Delete this session?"))return;db.events=(db.events||[]).filter(e=>e.id!==evId);saveDB();renderCalendar();showToast("Deleted");}
+function deleteEvent(evId){
+  if(!confirm("Delete this scheduled session?"))return;
+  const ev=(db.events||[]).find(e=>e.id===evId);
+  if(ev&&ev.sessionId){
+    // Remove the linked logged session too
+    db.sessions=db.sessions.filter(s=>s.id!==ev.sessionId);
+  }
+  db.events=(db.events||[]).filter(e=>e.id!==evId);
+  saveDB();renderCalendar();renderDash();renderList();
+  if(detailSid)showDetail(detailSid);
+  showToast("Session deleted!");
+}
 
 // ── CONSULTATIONS ─────────────────────────────────────────────────────────────
 if(!db.consultations)db.consultations=[];if(!db.consultCounter)db.consultCounter=1;
