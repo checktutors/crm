@@ -158,7 +158,7 @@ tr:hover td{background:#fafafa}
       <div class="card"><div class="card-title">Action Needed</div><div id="d-actions"></div></div>
       <div class="card">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleDashUpcoming()">
-          Upcoming Sessions <span id="dash-upcoming-toggle" style="font-size:11px;color:var(--navy);font-weight:600">Show All</span>
+          Upcoming Meetings <span id="dash-upcoming-toggle" style="font-size:11px;color:var(--navy);font-weight:600">Show All</span>
         </div>
         <div id="d-upcoming"></div>
         <div id="d-upcoming-all" style="display:none"></div>
@@ -947,20 +947,38 @@ function renderDash(){
     if(s.action==="Renewal coming due")acts.push(`<div class="alert-row al-amber"><div class="al-icon">&#9201;</div><div class="al-text">${st.name}<div class="al-sub">Expires in ${s.daysLeft}d</div></div></div>`);
   });
   document.getElementById("d-actions").innerHTML=acts.length?acts.join(""):`<div class="empty"><div class="empty-icon">&#9989;</div><p>All clear!</p></div>`;
-  const upcoming=[...(db.events||[])].filter(e=>e.date>=today()&&!e.logged).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||"").localeCompare(b.time||""));
+  // Merge upcoming sessions AND consultations
+  const upcomingSess=[...(db.events||[])].filter(e=>e.date>=today()&&!e.logged);
+  const upcomingConsults=[...(db.consultations||[])].filter(c=>c.date>=today()&&c.status!=="done"&&c.status!=="cancelled");
+  const allUpcoming=[
+    ...upcomingSess.map(e=>({...e,_type:"session"})),
+    ...upcomingConsults.map(c=>({...c,_type:"consult"}))
+  ].sort((a,b)=>a.date.localeCompare(b.date)||(a.time||"").localeCompare(b.time||""));
+  const upcoming=allUpcoming;
   const upEl=document.getElementById("d-upcoming");
   if(upEl){
-    if(!upcoming.length){upEl.innerHTML=`<div style="font-size:13px;color:var(--soft);padding:7px 0">No upcoming sessions scheduled.</div>`;}
-    else{upEl.innerHTML=upcoming.slice(0,3).map(ev=>{
-      const st=db.students.find(x=>x.id===ev.studentId);
+    if(!upcoming.length){upEl.innerHTML=`<div style="font-size:13px;color:var(--soft);padding:7px 0">No upcoming meetings scheduled.</div>`;}
+    else{upEl.innerHTML=upcoming.slice(0,3).map(item=>{
+      const isConsult=item._type==="consult";
+      const st=isConsult?null:db.students.find(x=>x.id===item.studentId);
       const p=st&&st.profile?st.profile:{};
-      const meetLink=ev.meetLink||p.meetLink||"";
+      const meetLink=isConsult?item.meetLink:(item.meetLink||p.meetLink||"");
+      const displayName=isConsult?item.name:(st?st.name:"Unknown");
+      const initials=displayName.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+      const bgColor=isConsult?"var(--purple)":"var(--navy)";
+      const label=isConsult?"Free Consultation":`${item.hours||1}h session${item.notes?" - "+item.notes.slice(0,20):""}`;
       return `<div style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid #f3f4f6;flex-wrap:wrap">
-        <div style="width:40px;height:40px;border-radius:50%;background:var(--navy);color:#fff;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${st?st.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase():"?"}</div>
-        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px;color:var(--navy)">${st?st.name:"Unknown"}</div>
-        <div style="font-size:11px;color:var(--soft)">${fmt(ev.date)}${ev.time?" at "+ev.time:""} - ${ev.hours||1}h${ev.notes?" - "+ev.notes.slice(0,25):""}</div></div>
+        <div style="width:40px;height:40px;border-radius:50%;background:${bgColor};color:#fff;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials||"?"}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="font-weight:700;font-size:13px;color:${isConsult?"var(--purple)":"var(--navy)"}">${displayName}</div>
+            ${isConsult?`<span style="font-size:10px;background:var(--purple-light);color:var(--purple);padding:1px 6px;border-radius:99px;font-weight:700">Consult</span>`:""}
+          </div>
+          <div style="font-size:11px;color:var(--soft)">${fmt(item.date)}${item.time?" at "+item.time:""} - ${label}</div>
+        </div>
         ${meetLink?`<a href="${meetLink}" target="_blank" style="background:#e8f5e9;color:#2e7d32;padding:4px 9px;border-radius:7px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #c8e6c9">Meet</a>`:""}
-      </div>`}).join("")+(upcoming.length>3?`<div style="font-size:11px;color:var(--navy);font-weight:600;padding:7px 0;cursor:pointer" onclick="toggleDashUpcoming()">+${upcoming.length-3} more</div>`:"")}
+      </div>`;
+    }).join("")+(upcoming.length>3?`<div style="font-size:11px;color:var(--navy);font-weight:600;padding:7px 0;cursor:pointer" onclick="toggleDashUpcoming()">+${upcoming.length-3} more</div>`:"")}
   }
   const exp=db.packages.filter(p=>{const st=db.students.find(x=>x.id===p.studentId);if(!st||st.archived)return false;const s=pkgStats(p);return!s.expired&&s.daysLeft<=14;}).sort((a,b)=>pkgStats(a).daysLeft-pkgStats(b).daysLeft);
   document.getElementById("d-expiring").innerHTML=exp.length?exp.map(p=>{
@@ -981,18 +999,28 @@ function toggleDashUpcoming(){
   if(!allEl)return;
   if(dashUpcomingExpanded){
     if(tog)tog.textContent="Hide";
-    const upcoming=[...(db.events||[])].filter(e=>e.date>=today()&&!e.logged).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||"").localeCompare(b.time||""));
-    allEl.innerHTML=upcoming.map(ev=>{
-      const st=db.students.find(x=>x.id===ev.studentId);
+    const upSess=[...(db.events||[])].filter(e=>e.date>=today()&&!e.logged);
+    const upCon=[...(db.consultations||[])].filter(c=>c.date>=today()&&c.status!=="done"&&c.status!=="cancelled");
+    const allUp=[...upSess.map(e=>({...e,_type:"session"})),...upCon.map(c=>({...c,_type:"consult"}))].sort((a,b)=>a.date.localeCompare(b.date)||(a.time||"").localeCompare(b.time||""));
+    allEl.innerHTML=allUp.map(item=>{
+      const isConsult=item._type==="consult";
+      const st=isConsult?null:db.students.find(x=>x.id===item.studentId);
       const p=st&&st.profile?st.profile:{};
-      const meetLink=ev.meetLink||p.meetLink||"";
+      const meetLink=isConsult?item.meetLink:(item.meetLink||p.meetLink||"");
+      const displayName=isConsult?item.name:(st?st.name:"Unknown");
+      const initials=displayName.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
       return `<div style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid #f3f4f6;flex-wrap:wrap">
-        <div style="width:40px;height:40px;border-radius:50%;background:var(--navy);color:#fff;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${st?st.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase():"?"}</div>
-        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px;color:var(--navy)">${st?st.name:"Unknown"}</div>
-        <div style="font-size:11px;color:var(--soft)">${fmt(ev.date)}${ev.time?" at "+ev.time:""} - ${ev.hours||1}h${ev.notes?" - "+ev.notes.slice(0,30):""}</div></div>
+        <div style="width:40px;height:40px;border-radius:50%;background:${isConsult?"var(--purple)":"var(--navy)"};color:#fff;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials||"?"}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="font-weight:700;font-size:13px;color:${isConsult?"var(--purple)":"var(--navy)"}">${displayName}</div>
+            ${isConsult?`<span style="font-size:10px;background:var(--purple-light);color:var(--purple);padding:1px 6px;border-radius:99px;font-weight:700">Consult</span>`:""}
+          </div>
+          <div style="font-size:11px;color:var(--soft)">${fmt(item.date)}${item.time?" at "+item.time:""} - ${isConsult?"Free Consultation":(item.hours||1)+"h"}</div>
+        </div>
         <div style="display:flex;gap:5px">
           ${meetLink?`<a href="${meetLink}" target="_blank" style="background:#e8f5e9;color:#2e7d32;padding:4px 9px;border-radius:7px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #c8e6c9">Meet</a>`:""}
-          <button class="btn btn-secondary btn-sm" onclick="goToCalendarDay('${ev.date}')" style="font-size:11px">Calendar</button>
+          <button class="btn btn-secondary btn-sm" onclick="goToCalendarDay('${item.date}')" style="font-size:11px">Calendar</button>
         </div>
       </div>`;
     }).join("");
@@ -2597,14 +2625,7 @@ renderBusinessPage=function(){
 };
 
 // ── PATCH setBizTab TO RENDER DOC TEMPLATES ───────────────────────────────────
-const _origSetBizTab=setBizTab;
-setBizTab=function(tab,el){
-  _origSetBizTab(tab,el);
-  if(tab==="goals"){renderBizGoals();renderBizGoalsTargets();}
-  if(tab==="admin"){renderEmailTemplates();renderDocTemplates();}
-  if(tab==="logos")renderLogos();
-  if(tab==="drive")renderDriveLinks();
-};
+// setBizTab handled directly above
 
 
 
@@ -2903,6 +2924,22 @@ function deleteBrandColor(idx){
   if(!confirm("Remove this color?"))return;
   db.brandColors.splice(idx,1);saveDB();renderBrandColors();
 }
+
+// Editable Canva link
+if(!db.canvaUrl) db.canvaUrl="https://www.canva.com/create/social-media/";
+function editCanvaLink(){
+  const cur=db.canvaUrl||"https://www.canva.com/create/social-media/";
+  const val=prompt("Paste your Canva link:",cur);
+  if(!val||!val.trim())return;
+  db.canvaUrl=val.trim();saveDB();
+  const btn=document.getElementById("canva-design-btn");
+  if(btn)btn.href=db.canvaUrl;
+  showToast("Canva link updated!");
+}
+// Init Canva link on load
+(function(){
+  if(db.canvaUrl){const btn=document.getElementById("canva-design-btn");if(btn)btn.href=db.canvaUrl;}
+})();
 </script>
 
 <!-- Social Media Page -->
@@ -2910,10 +2947,13 @@ function deleteBrandColor(idx){
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
     <h2 style="font-size:22px;font-weight:800;color:var(--navy)">&#128247; Social Media</h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <a href="https://www.canva.com/create/social-media/" target="_blank" style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-radius:10px;background:#00C4CC;color:#fff;font-weight:700;font-size:14px;text-decoration:none;transition:.15s;border:none;cursor:pointer" onmouseover="this.style.background='#00a8b5'" onmouseout="this.style.background='#00C4CC'">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.3)"/><path d="M15.5 8.5C14.7 7.2 13.4 6.5 12 6.5c-3 0-5.5 2.5-5.5 5.5s2.5 5.5 5.5 5.5c1.4 0 2.7-.5 3.6-1.4" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><circle cx="15.5" cy="12" r="2" fill="#fff"/></svg>
-        Design on Canva
-      </a>
+      <span style="position:relative;display:inline-block">
+        <a id="canva-design-btn" href="https://www.canva.com/create/social-media/" target="_blank" style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-radius:10px;background:#00C4CC;color:#fff;font-weight:700;font-size:14px;text-decoration:none;transition:.15s;border:none;cursor:pointer" onmouseover="this.style.background='#00a8b5'" onmouseout="this.style.background='#00C4CC'">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.3)"/><path d="M15.5 8.5C14.7 7.2 13.4 6.5 12 6.5c-3 0-5.5 2.5-5.5 5.5s2.5 5.5 5.5 5.5c1.4 0 2.7-.5 3.6-1.4" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><circle cx="15.5" cy="12" r="2" fill="#fff"/></svg>
+          Design on Canva
+        </a>
+        <button onclick="editCanvaLink()" title="Edit Canva link" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--navy);color:#fff;border:none;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✎</button>
+      </span>
       <button class="btn btn-primary" onclick="openSocialPost('scheduled')">+ New Post</button>
     </div>
   </div>
