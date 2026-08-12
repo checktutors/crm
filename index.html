@@ -2354,12 +2354,17 @@ function renderDocTemplates(){
 }
 function openAddDocTemplate(mode){
   editDocIdx=null;addDocMode=mode;
+  pendingModalFile=null;
   document.getElementById("doc-tmpl-name").value="";
   document.getElementById("doc-tmpl-desc").value="";
   document.getElementById("doc-tmpl-icon").value="📄";
   document.getElementById("doc-tmpl-url").value="";
-  document.getElementById("doc-tmpl-url-row").style.display=mode==="link"?"block":"none";
-  document.getElementById("doc-tmpl-file-row").style.display=mode==="file"?"block":"none";
+  const urlRow=document.getElementById("doc-tmpl-url-row");
+  if(urlRow)urlRow.style.display="block";
+  const prev=document.getElementById("doc-modal-file-preview");
+  if(prev){prev.style.display="none";prev.textContent="";}
+  const inp=document.getElementById("doc-modal-file");
+  if(inp)inp.value="";
   document.getElementById("doc-tmpl-edit-idx").value="";
   openModal("m-doc-template");
 }
@@ -2367,12 +2372,18 @@ function editDocTemplate(idx){
   editDocIdx=idx;
   const d=(db.docTemplates||[])[idx];if(!d)return;
   addDocMode=d.type||"link";
+  pendingModalFile=null;
   document.getElementById("doc-tmpl-name").value=d.name||"";
   document.getElementById("doc-tmpl-desc").value=d.desc||"";
   document.getElementById("doc-tmpl-icon").value=d.icon||"📄";
   document.getElementById("doc-tmpl-url").value=d.url||"";
-  document.getElementById("doc-tmpl-url-row").style.display=d.type==="link"?"block":"none";
-  document.getElementById("doc-tmpl-file-row").style.display=d.type==="file"?"block":"none";
+  const urlRow=document.getElementById("doc-tmpl-url-row");
+  if(urlRow)urlRow.style.display="block";
+  const prev=document.getElementById("doc-modal-file-preview");
+  if(prev){
+    prev.style.display=d.type==="file"?"block":"none";
+    prev.textContent=d.type==="file"?"Current file: "+(d.filename||d.name)+" (drag new file to replace)":"";
+  }
   document.getElementById("doc-tmpl-edit-idx").value=idx;
   openModal("m-doc-template");
 }
@@ -2866,10 +2877,7 @@ closeModal=function(id){
         <div style="display:flex;flex-direction:column;gap:9px" id="doc-templates-list"></div>
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="openAddDocTemplate('link')">+ Add Link</button>
-          <label class="btn btn-secondary btn-sm" style="cursor:pointer">
-            + Upload File
-            <input type="file" style="display:none" onchange="uploadDocTemplate(this)"/>
-          </label>
+          <button class="btn btn-secondary btn-sm" onclick="openAddDocTemplate('file')">+ Upload File</button>
         </div>
       </div>
     </div>
@@ -2878,9 +2886,9 @@ closeModal=function(id){
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:9px">
         <a href="https://calendar.google.com" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#128197; Google Calendar</a>
         <a href="https://classroom.google.com" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#127979; Google Classroom</a>
-        <a href="https://mail.google.com" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#128231; Gmail</a>
+        <a href="https://mail.proton.me" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#128231; Proton Mail</a>
         <a href="https://docs.google.com/forms" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#128203; Intake Form</a>
-        <a href="https://instagram.com/checktutors" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#128247; Instagram</a>
+        <a href="https://business.facebook.com" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#128200; Meta Business Suite</a>
         <a href="https://checktutors.com" target="_blank" class="btn btn-secondary" style="text-decoration:none;text-align:center;font-size:13px">&#127760; Website</a>
       </div>
     </div>
