@@ -125,7 +125,7 @@ tr:hover td{background:#fafafa}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--navy);color:#fff;padding:11px 22px;border-radius:99px;font-size:14px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.2);transition:.3s;z-index:1000;white-space:nowrap}
 .toast.show{transform:translateX(-50%) translateY(0)}
 
-.cal-cell{min-height:100px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;cursor:pointer;transition:.15s;vertical-align:top;position:relative}
+.cal-cell{min-height:80px;max-height:110px;overflow:hidden;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;cursor:pointer;transition:.15s;vertical-align:top;position:relative}
 .cal-cell:nth-child(7n){border-right:none}
 .cal-cell:hover{background:var(--navy-light)}
 .cal-cell.other-month{background:#fafafa;opacity:.6}
@@ -350,6 +350,7 @@ tr:hover td{background:#fafafa}
       <select id="ss-student" onchange="onSessChange()"><option value="">- Select -</option></select>
     </div>
     <div class="field"><label>Date *</label><input id="ss-date" type="date"/></div>
+    <div class="field"><label>Time</label><input id="ss-time" type="time" placeholder="e.g. 14:00"/></div>
     <div class="field"><label>Hours *</label><input id="ss-hours" type="number" placeholder="1" min=".25" step=".25"/></div>
     <div class="field form-full"><label>Notes / Topic</label><textarea id="ss-notes" placeholder="e.g. Reviewed quadratic equations..."></textarea></div>
   </div>
@@ -391,7 +392,7 @@ tr:hover td{background:#fafafa}
       <button class="btn btn-secondary btn-sm" onclick="calNext()">&#8594;</button>
       <button class="btn btn-secondary btn-sm" onclick="goToday()">Today</button>
       <button class="btn btn-primary" onclick="openCalModal(null,null)">+ Add Session</button>
-      <button class="btn" style="background:#7C3AED;color:#fff;white-space:nowrap" onclick="openConsultModal(null,selectedDay||today())">+ Free Consultation</button>
+      <button class="btn" style="background:#7C3AED;color:#fff;white-space:nowrap" onclick="openConsultModal(null,null)">+ Free Consultation</button>
     </div>
   </div>
   <div class="card" style="padding:0;overflow:hidden">
@@ -877,6 +878,7 @@ function openLogSession(sid){
   sel.innerHTML="<option value=''>- Select student -</option>"+db.students.filter(s=>!s.archived).map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
   if(sid)sel.value=sid;
   document.getElementById("ss-date").value=today();
+  const ssTimeEl=document.getElementById("ss-time");if(ssTimeEl)ssTimeEl.value="";
   document.getElementById("ss-hours").value="";document.getElementById("ss-notes").value="";
   document.getElementById("ss-warn").style.display="none";
   document.getElementById("ss-pkg-selector-wrap").style.display="none";
@@ -977,31 +979,37 @@ function renderCalendar(){
     numEl.className="cal-day-num"+(dateStr===todayStr?" today-num":"");
     numEl.textContent=dayNum;
     cell.appendChild(numEl);
-    // Show events for this day
+    // Show events for this day (max 2 visible + overflow indicator)
     const dayEvents=getEventsForDay(dateStr);
-    dayEvents.forEach(ev=>{
+    const loggedSess=db.sessions.filter(s=>s.date===dateStr&&!(db.events||[]).find(e=>e.sessionId===s.id));
+    const allItems=[...dayEvents,...loggedSess.map(s=>({...s,isLogged:true}))];
+    const maxShow=2;
+    allItems.slice(0,maxShow).forEach(ev=>{
       const evEl=document.createElement("div");
       if(ev.isConsult){
         evEl.className="cal-event consultation"+(ev.logged?" done":"");
-        evEl.textContent=(ev.time?ev.time+" ":"")+"Consult: "+ev.name;
+        evEl.textContent=(ev.time?ev.time.slice(0,5)+" ":"")+"Consult";
         evEl.onclick=e=>{e.stopPropagation();openConsultModal(ev.id,null);};
+      } else if(ev.isLogged){
+        const st=db.students.find(s=>s.id===ev.studentId);
+        evEl.className="cal-event done";
+        evEl.textContent=(st?st.name.split(" ")[0]:"?")+": "+ev.hours+"h";
+        evEl.onclick=e=>{e.stopPropagation();};
       } else {
         const st=db.students.find(s=>s.id===ev.studentId);
         evEl.className="cal-event"+(ev.logged?" done":"")+(ev.meetLink?" has-meet":"");
-        evEl.textContent=(ev.time?ev.time+" ":"")+(st?st.name:"?")+": "+(ev.notes||"Session");
+        evEl.textContent=(ev.time?ev.time.slice(0,5)+" ":"")+(st?st.name.split(" ")[0]:"?");
         evEl.onclick=e=>{e.stopPropagation();openCalModal(ev.id,null);};
       }
       cell.appendChild(evEl);
     });
-    // Also show logged sessions
-    const loggedSess=db.sessions.filter(s=>s.date===dateStr&&!db.events.find(e=>e.sessionId===s.id));
-    loggedSess.forEach(sess=>{
-      const el=document.createElement("div");
-      const st=db.students.find(s=>s.id===sess.studentId);
-      el.className="cal-event done";
-      el.textContent=(st?st.name:"?")+": "+(sess.notes||"Session")+" ("+sess.hours+"h)";
-      cell.appendChild(el);
-    });
+    if(allItems.length>maxShow){
+      const more=document.createElement("div");
+      more.style.cssText="font-size:10px;color:var(--navy);font-weight:700;padding:1px 4px;cursor:pointer";
+      more.textContent="+"+(allItems.length-maxShow)+" more";
+      more.onclick=e=>{e.stopPropagation();selectedDay=dateStr;renderCalendar();showDayView(dateStr);};
+      cell.appendChild(more);
+    }
     cell.addEventListener("click",()=>{selectedDay=dateStr;renderCalendar();showDayView(dateStr);});
     grid.appendChild(cell);
   }
@@ -1396,14 +1404,20 @@ let editSessId=null;
 function editSession(sessId){
   editSessId=sessId;
   const sess=db.sessions.find(s=>s.id===sessId);if(!sess)return;
-  sessSid=sess.studentId; // remember which student we came from
+  sessSid=sess.studentId;
   const sel=document.getElementById("ss-student");
   sel.innerHTML="<option value=''>- Select student -</option>"+db.students.filter(s=>!s.archived).map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
   sel.value=sess.studentId;
   document.getElementById("ss-date").value=sess.date;
   document.getElementById("ss-hours").value=sess.hours;
   document.getElementById("ss-notes").value=sess.notes||"";
+  // Prefill time from associated calendar event if exists
+  const assocEv=(db.events||[]).find(e=>e.sessionId===sessId);
+  const ssTimeEl=document.getElementById("ss-time");
+  if(ssTimeEl)ssTimeEl.value=assocEv?assocEv.time||"":"";
   document.getElementById("ss-warn").style.display="none";
+  document.getElementById("ss-pkg-selector-wrap").style.display="none";
+  populatePkgDropdown("ss-student","ss-package","ss-pkg-selector-wrap");
   openModal("m-session");
 }
 
@@ -1421,6 +1435,15 @@ function saveSession(){
     if(idx>=0){db.sessions[idx]={...db.sessions[idx],studentId:sid,date,hours,notes};}
     editSessId=null;
     saveDB();closeModal("m-session");
+    // Update associated calendar event time if time was changed
+    const editTime=document.getElementById("ss-time")?document.getElementById("ss-time").value:"";
+    const existingEv=(db.events||[]).find(e=>e.sessionId===editSessId);
+    if(existingEv){
+      existingEv.time=editTime;existingEv.hours=hours;existingEv.notes=notes;existingEv.date=date;
+    } else if(editTime){
+      if(!db.events)db.events=[];
+      db.events.push({id:"ev"+(db.eventCounter++),studentId:sid,date,time:editTime,hours,notes,logged:true,sessionId:editSessId});
+    }
     const returnSid=sessSid||sid;
     if(returnSid){
       showDetail(returnSid);
@@ -1430,10 +1453,18 @@ function saveSession(){
         if(sessTab)switchTab(returnSid,"sessions",sessTab);
       },50);
     } else renderSessions();
-    renderDash();renderList();showToast("Session updated!");
+    renderDash();renderList();renderCalendar();showToast("Session updated!");
   } else {
     // Logging new session
-    db.sessions.push({id:"ss"+(++db.counters.session),studentId:sid,date,hours,notes});
+    const newSessId="ss"+(++db.counters.session);
+    const sessTime=document.getElementById("ss-time")?document.getElementById("ss-time").value:"";
+    db.sessions.push({id:newSessId,studentId:sid,date,hours,notes});
+    // If time was set, also create a calendar event so it shows in time grid
+    if(sessTime){
+      if(!db.events)db.events=[];
+      const newEvId="ev"+(db.eventCounter++);
+      db.events.push({id:newEvId,studentId:sid,date,time:sessTime,hours,notes,logged:true,sessionId:newSessId});
+    }
     saveDB();closeModal("m-session");
     if(sessSid){
       showDetail(sessSid);
