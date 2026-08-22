@@ -3747,6 +3747,8 @@ function renderMonitor(){const root=document.getElementById('page-monitor');if(!
     </div>
   </div>
 
+  <input id="freebie-file-picker" type="file" accept="application/pdf,.pdf" multiple style="display:none" onchange="handleFreebiePickerChange(this)">
+
   <div class="stat-grid" id="freebie-stats" style="margin-bottom:16px"></div>
 
   <div class="card" style="margin-bottom:14px">
@@ -4553,7 +4555,12 @@ function renderFreebieCategories(){
         <div style="display:flex;gap:4px"><button class="btn-icon" onclick="editFreebieCategory('${c.id}')" title="Edit category">✎</button><button class="btn-icon" onclick="deleteFreebieCategory('${c.id}')" title="Delete category">🗑️</button></div>
       </div>
       <div style="display:flex;flex-direction:column;gap:7px">${items.length?items.map(f=>freebieItemHTML(f)).join(''):'<div style="font-size:11px;color:var(--soft);padding:5px 2px">No PDFs in this category yet.</div>'}</div>
-      <div class="freebie-drop-zone" data-catid="${c.id}" style="border:2px dashed var(--border);border-radius:10px;padding:16px;text-align:center;cursor:pointer;font-size:12px;color:var(--soft);margin-top:10px;transition:.15s" onclick="pickFreebieFiles('${c.id}')" ondragover="freebieDragOver(event,this)" ondragleave="freebieDragLeave(this)" ondrop="freebieDrop(event,this,'${c.id}')">📄 Drag & drop PDFs here<br><span style="font-size:10px">or click to browse</span></div>
+      <div class="freebie-drop-zone" data-catid="${c.id}" style="border:2px dashed var(--border);border-radius:10px;padding:16px;text-align:center;font-size:12px;color:var(--soft);margin-top:10px;transition:.15s;background:#fbfbff" ondragover="freebieDragOver(event,this)" ondragleave="freebieDragLeave(this)" ondrop="freebieDrop(event,this,'${c.id}')">
+        <div style="font-size:24px;margin-bottom:5px">📄</div>
+        <div style="font-weight:700;color:var(--text);margin-bottom:3px">Drag &amp; drop PDFs here</div>
+        <div style="font-size:10px;margin-bottom:9px">or choose files from your computer</div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="event.stopPropagation();pickFreebieFiles('${c.id}')">Browse PDFs</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -4567,21 +4574,77 @@ function freebieItemHTML(f){
     <button class="btn-icon" onclick="editFreebie('${f.id}')" title="Edit">✎</button>
   </div>`;
 }
-function freebieDragOver(e,z){e.preventDefault();z.style.borderColor='var(--navy)';z.style.background='var(--navy-light)';z.style.color='var(--navy)';}
-function freebieDragLeave(z){z.style.borderColor='';z.style.background='';z.style.color='';}
-function freebieDrop(e,z,catId){e.preventDefault();freebieDragLeave(z);uploadFreebieFiles(Array.from(e.dataTransfer.files||[]),catId);}
-function pickFreebieFiles(catId){const i=document.createElement('input');i.type='file';i.accept='application/pdf,.pdf';i.multiple=true;i.onchange=()=>uploadFreebieFiles(Array.from(i.files||[]),catId);i.click();}
-function uploadFreebieFiles(files,catId){
-  const pdfs=files.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));
-  if(!pdfs.length){showToast('Please upload PDF files.');return;}
-  pdfs.forEach(file=>{
-    const r=new FileReader();
-    r.onload=e=>{db.freebies.push({id:'fb'+(db.freebieCounter++),title:file.name.replace(/\.pdf$/i,''),filename:file.name,categoryId:catId,size:typeof fmtBytes==='function'?fmtBytes(file.size):Math.round(file.size/1024)+' KB',date:today(),data:e.target.result});saveDB();renderFreebiesPage();showToast(file.name+' added!');};
-    r.readAsDataURL(file);
+let freebiePickerCategory='';
+const FREEBIE_FILE_DB='CheckTutorsFreebieFiles';
+const FREEBIE_FILE_STORE='pdfs';
+function openFreebieFileDB(){
+  return new Promise((resolve,reject)=>{
+    if(!window.indexedDB){reject(new Error('This browser does not support local file storage.'));return;}
+    const req=indexedDB.open(FREEBIE_FILE_DB,1);
+    req.onupgradeneeded=()=>{const d=req.result;if(!d.objectStoreNames.contains(FREEBIE_FILE_STORE))d.createObjectStore(FREEBIE_FILE_STORE);};
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error||new Error('Could not open file storage.'));
   });
-  if(pdfs.length!==files.length)showToast('Non-PDF files were skipped.');
 }
-function downloadFreebie(id){const f=freebieById(id);if(!f||!f.data)return;const a=document.createElement('a');a.href=f.data;a.download=f.filename||((f.title||'freebie')+'.pdf');document.body.appendChild(a);a.click();a.remove();}
+async function saveFreebieBlob(id,file){
+  const d=await openFreebieFileDB();
+  return new Promise((resolve,reject)=>{const tx=d.transaction(FREEBIE_FILE_STORE,'readwrite');tx.objectStore(FREEBIE_FILE_STORE).put(file,id);tx.oncomplete=()=>{d.close();resolve();};tx.onerror=()=>{const e=tx.error;d.close();reject(e);};});
+}
+async function getFreebieBlob(id){
+  const d=await openFreebieFileDB();
+  return new Promise((resolve,reject)=>{const tx=d.transaction(FREEBIE_FILE_STORE,'readonly');const r=tx.objectStore(FREEBIE_FILE_STORE).get(id);r.onsuccess=()=>{d.close();resolve(r.result||null);};r.onerror=()=>{const e=r.error;d.close();reject(e);};});
+}
+async function deleteFreebieBlob(id){
+  try{const d=await openFreebieFileDB();await new Promise((resolve,reject)=>{const tx=d.transaction(FREEBIE_FILE_STORE,'readwrite');tx.objectStore(FREEBIE_FILE_STORE).delete(id);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});d.close();}catch(e){}
+}
+function freebieDragOver(e,z){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';z.style.borderColor='var(--navy)';z.style.background='var(--navy-light)';z.style.color='var(--navy)';}
+function freebieDragLeave(z){z.style.borderColor='';z.style.background='#fbfbff';z.style.color='';}
+function freebieDrop(e,z,catId){e.preventDefault();e.stopPropagation();freebieDragLeave(z);const files=Array.from((e.dataTransfer&&e.dataTransfer.files)||[]);uploadFreebieFiles(files,catId);}
+function pickFreebieFiles(catId){
+  freebiePickerCategory=catId;
+  const i=document.getElementById('freebie-file-picker');
+  if(!i){showToast('File picker could not be opened.');return;}
+  i.value='';
+  i.click();
+}
+function handleFreebiePickerChange(input){const files=Array.from(input.files||[]);const catId=freebiePickerCategory;input.value='';if(catId)uploadFreebieFiles(files,catId);}
+async function uploadFreebieFiles(files,catId){
+  try{
+    const pdfs=(files||[]).filter(f=>f && (f.type==='application/pdf'||String(f.name||'').toLowerCase().endsWith('.pdf')));
+    if(!pdfs.length){showToast('Please choose a PDF file.');return;}
+    let added=0;
+    for(const file of pdfs){
+      const id='fb'+(db.freebieCounter++);
+      await saveFreebieBlob(id,file);
+      db.freebies.push({id,title:file.name.replace(/\.pdf$/i,''),filename:file.name,categoryId:catId,size:typeof fmtBytes==='function'?fmtBytes(file.size):Math.round(file.size/1024)+' KB',date:today(),storage:'indexeddb'});
+      added++;
+    }
+    try{saveDB();}catch(err){
+      // Roll back newly-added metadata/files if the CRM itself cannot be saved.
+      const rollback=db.freebies.splice(db.freebies.length-added,added);
+      for(const f of rollback)await deleteFreebieBlob(f.id);
+      db.freebieCounter=Math.max(1,db.freebieCounter-added);
+      throw err;
+    }
+    renderFreebiesPage();
+    showToast(added===1?pdfs[0].name+' added!':added+' PDFs added!');
+    if(pdfs.length!==(files||[]).length)setTimeout(()=>showToast('Non-PDF files were skipped.'),250);
+  }catch(err){
+    console.error('Freebie upload failed',err);
+    const quota=err&&(err.name==='QuotaExceededError'||String(err.message||'').toLowerCase().includes('quota'));
+    showToast(quota?'Browser storage is full. Remove a large saved file and try again.':'Could not save that PDF. Please try again.');
+  }
+}
+async function downloadFreebie(id){
+  const f=freebieById(id);if(!f)return;
+  try{
+    // Backward compatibility for any freebie saved by the earlier version.
+    if(f.data){const a=document.createElement('a');a.href=f.data;a.download=f.filename||((f.title||'freebie')+'.pdf');document.body.appendChild(a);a.click();a.remove();return;}
+    const blob=await getFreebieBlob(id);
+    if(!blob){showToast('PDF file data is missing. Please upload it again.');return;}
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=f.filename||((f.title||'freebie')+'.pdf');document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }catch(err){console.error(err);showToast('Could not open that PDF.');}
+}
 
 function addFreebieCategory(){
   const name=prompt('New freebie category name:');if(!name||!name.trim())return;
@@ -4596,7 +4659,7 @@ function deleteFreebieCategory(id){
 }
 function editFreebie(id){const f=freebieById(id);if(!f)return;document.getElementById('fe-id').value=id;document.getElementById('fe-title').value=f.title||f.filename||'';document.getElementById('fe-category').innerHTML=(db.freebieCategories||[]).map(c=>`<option value="${c.id}" ${c.id===f.categoryId?'selected':''}>${escFreebie(c.emoji||'📁')} ${escFreebie(c.name)}</option>`).join('');openModal('m-freebie-edit');}
 function saveFreebieEdit(){const id=document.getElementById('fe-id').value,f=freebieById(id);if(!f)return;f.title=document.getElementById('fe-title').value.trim()||f.filename;f.categoryId=document.getElementById('fe-category').value;saveDB();closeModal('m-freebie-edit');renderFreebiesPage();showToast('Freebie updated!');}
-function deleteEditingFreebie(){const id=document.getElementById('fe-id').value,f=freebieById(id);if(!f)return;if(!confirm('Delete “'+(f.title||f.filename)+'” from your Freebies Library? Send history will stay in the tracker.'))return;db.freebies=db.freebies.filter(x=>x.id!==id);saveDB();closeModal('m-freebie-edit');renderFreebiesPage();showToast('Freebie deleted');}
+async function deleteEditingFreebie(){const id=document.getElementById('fe-id').value,f=freebieById(id);if(!f)return;if(!confirm('Delete “'+(f.title||f.filename)+'” from your Freebies Library? Send history will stay in the tracker.'))return;db.freebies=db.freebies.filter(x=>x.id!==id);saveDB();await deleteFreebieBlob(id);closeModal('m-freebie-edit');renderFreebiesPage();showToast('Freebie deleted');}
 
 function openFreebieSend(preselect){
   const freebies=db.freebies||[];if(!freebies.length){showToast('Upload a freebie first.');return;}
