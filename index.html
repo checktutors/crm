@@ -1,4 +1,4 @@
-<!-- CHECK TUTORS BUILD: 2026-08-23 14:35 employee-lock-drive -->
+<!-- CHECK TUTORS BUILD: 2026-08-23 18:05 timesheet-copy-cleanup -->
 <html lang="en"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -166,7 +166,12 @@ tr:hover td{background:#fafafa}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script></head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+@media(max-width:1100px){#page-social>div[style*="grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(260px,.8fr)"]{grid-template-columns:1fr 1fr!important}#social-instructions-card{grid-column:1/-1}}
+@media(max-width:760px){#page-social>div[style*="grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(260px,.8fr)"]{grid-template-columns:1fr!important}#social-instructions-card{grid-column:auto}}
+</style>
+</head>
 <body class="auth-locked">
 
 <div id="ct-login-screen">
@@ -270,6 +275,15 @@ tr:hover td{background:#fafafa}
       <div class="card"><div class="card-title">Expiring in 14 Days</div><div id="d-expiring"><div style="font-size:13px;color:var(--soft);padding:5px 0">Nothing expiring soon.</div></div></div>
       <div class="card"><div class="card-title">Recent Sessions</div><div id="d-recent"><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6"><div><div style="font-size:13px;font-weight:600"></div><div style="font-size:11px;color:var(--soft)">Lesson 4: What is a Function. Leena did grea</div></div><div style="text-align:right;margin-left:9px;flex-shrink:0"><div style="font-size:11px;color:var(--soft)">20 Aug 2026</div><div style="font-size:12px;font-weight:700;color:var(--navy)">1h</div></div></div><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6"><div><div style="font-size:13px;font-weight:600"></div><div style="font-size:11px;color:var(--soft)">Lesson 3: Trigonometry, fractions refresher,</div></div><div style="text-align:right;margin-left:9px;flex-shrink:0"><div style="font-size:11px;color:var(--soft)">18 Aug 2026</div><div style="font-size:12px;font-weight:700;color:var(--navy)">1h</div></div></div><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6"><div><div style="font-size:13px;font-weight:600"></div><div style="font-size:11px;color:var(--soft)">Lesson 2: Analytic Geometry and Function Not</div></div><div style="text-align:right;margin-left:9px;flex-shrink:0"><div style="font-size:11px;color:var(--soft)">17 Aug 2026</div><div style="font-size:12px;font-weight:700;color:var(--navy)">1h</div></div></div><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6"><div><div style="font-size:13px;font-weight:600"></div><div style="font-size:11px;color:var(--soft)">Lesson 1: Initial Assessment, Welcome Sessio</div></div><div style="text-align:right;margin-left:9px;flex-shrink:0"><div style="font-size:11px;color:var(--soft)">14 Aug 2026</div><div style="font-size:12px;font-weight:700;color:var(--navy)">1h</div></div></div><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6"><div><div style="font-size:13px;font-weight:600"></div><div style="font-size:11px;color:var(--soft)">Lesson 8: Intermediate Sentence Structure, I</div></div><div style="text-align:right;margin-left:9px;flex-shrink:0"><div style="font-size:11px;color:var(--soft)">13 Aug 2026</div><div style="font-size:12px;font-weight:700;color:var(--navy)">1h</div></div></div></div></div>
     </div>
+  </div>
+
+  <!-- Shared Admin Tasks (Owner) -->
+  <div class="card ct-owner-only" style="margin-top:14px" id="ct-owner-tasks-card" data-owner-only="1">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <span>📌 Tasks Assigned</span>
+      <button class="btn btn-primary btn-sm" onclick="ctOpenAssignTask()">+ Assign Task</button>
+    </div>
+    <div id="ct-owner-task-list"></div>
   </div>
 
   <!-- To-Do List -->
@@ -594,6 +608,37 @@ tr:hover td{background:#fafafa}
 </div>
 
 
+<!-- Assign / Edit Admin Task -->
+<div class="overlay" id="m-admin-task-edit"><div class="modal" style="max-width:720px">
+  <div class="modal-hd"><div class="modal-title" id="ct-task-edit-title">📌 Assign Task</div><button class="btn-icon" onclick="closeModal('m-admin-task-edit')">✕</button></div>
+  <input type="hidden" id="ct-task-id">
+  <div class="form-grid">
+    <div class="field form-full"><label>Task Title</label><input id="ct-task-title" placeholder="e.g. Create September Instagram carousel"></div>
+    <div class="field"><label>Assign To</label><select id="ct-task-assignee"></select></div>
+    <div class="field"><label>Due Date</label><input id="ct-task-due" type="date"></div>
+    <div class="field form-full"><label>Task Details / Instructions</label><textarea id="ct-task-details" rows="5" placeholder="Add the quick details, links to reference material, expectations, etc."></textarea></div>
+    <div class="field form-full"><label>Instructions PDF (optional)</label><input id="ct-task-instruction-file" type="file" accept="application/pdf,.pdf"><div id="ct-task-instruction-current" style="font-size:11px;color:var(--soft);margin-top:5px"></div></div>
+  </div>
+  <div class="modal-ft"><button type="button" class="btn btn-danger" id="ct-task-delete-btn" onclick="ctDeleteTaskFromEdit(event)" style="display:none">Delete Task</button><button class="btn btn-secondary" onclick="closeModal('m-admin-task-edit')">Cancel</button><button class="btn btn-primary" onclick="ctSaveAssignedTask()">Save Task</button></div>
+</div></div>
+
+<!-- Task Details / Completion -->
+<div class="overlay" id="m-admin-task-view"><div class="modal" style="max-width:760px">
+  <div class="modal-hd"><div><div class="modal-title" id="ct-task-view-title">📌 Task</div><div id="ct-task-view-meta" style="font-size:12px;color:var(--soft);margin-top:3px"></div></div><button class="btn-icon" onclick="closeModal('m-admin-task-view')">✕</button></div>
+  <input type="hidden" id="ct-task-view-id">
+  <div id="ct-task-view-body"></div>
+  <div id="ct-task-completion-area" style="margin-top:16px">
+    <div class="card-title" style="margin-bottom:10px">✅ Complete Task</div>
+    <div class="form-grid">
+      <div class="field form-full"><label>Completed Work Link (optional)</label><input id="ct-task-completion-link" type="url" placeholder="https://www.canva.com/... or Google Drive link"></div>
+      <div class="field form-full"><label>Attach Completed Work (optional)</label><input id="ct-task-completion-file" type="file" accept=".pdf,.doc,.docx,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,application/pdf,image/*"><div id="ct-task-completion-current" style="font-size:11px;color:var(--soft);margin-top:5px"></div></div>
+      <div class="field form-full"><label>Completion Notes (optional)</label><textarea id="ct-task-completion-notes" rows="3" placeholder="Anything the Owner should know about the completed task"></textarea></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-primary" id="ct-task-complete-btn" onclick="ctCompleteTask()">✓ Mark Task Complete</button></div>
+  </div>
+  <div class="modal-ft"><button class="btn btn-secondary" onclick="closeModal('m-admin-task-view')">Close</button><button class="btn btn-secondary ct-owner-only" data-owner-only="1" id="ct-task-owner-edit-btn" onclick="ctEditTaskFromView()">✏️ Edit Task</button><button class="btn btn-primary ct-owner-only" data-owner-only="1" id="ct-task-reopen-btn" onclick="ctReopenTask()" style="display:none">↩ Reopen Task</button></div>
+</div></div>
+
 <div class="overlay" id="m-employee">
   <div class="modal" style="max-width:650px">
     <div class="modal-hd"><div class="modal-title" id="employee-modal-title">Add Employee</div><button class="btn-icon" onclick="closeModal('m-employee')">✕</button></div>
@@ -608,6 +653,13 @@ tr:hover td{background:#fafafa}
       <div class="field"><label>Status</label><select id="emp-status"><option>Active</option><option>Inactive</option><option>Archived</option></select></div>
       <div class="field"><label>Start Date</label><input id="emp-start" type="date"></div>
       <div class="field form-full"><label>Notes</label><textarea id="emp-notes" placeholder="Internal notes"></textarea></div>
+    </div>
+    <div id="ct-employee-task-panel" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <div class="card-title" style="margin:0">📌 Assigned Tasks</div>
+        <button type="button" class="btn btn-primary btn-sm" id="ct-employee-assign-task-btn">+ Assign Task</button>
+      </div>
+      <div id="ct-employee-task-list"></div>
     </div>
     <div class="modal-ft">
       <button class="btn btn-danger" id="emp-delete-btn" style="display:none;margin-right:auto" onclick="deleteEmployeeFromModal()">Delete</button>
@@ -2357,6 +2409,7 @@ function renderSocialPage(){
   renderSocialIdeas();
   renderSocialPlatforms();
   renderContentPillars();
+  renderSocialInstructions();
 }
 function setSocialView(view,el){
   socialView=view;
@@ -2409,10 +2462,15 @@ function renderSocialCalendar(){
       const posts=(db.socialPosts||[]).filter(p=>p.date===dateStr);
       posts.slice(0,2).forEach(post=>{
         const el2=document.createElement("div");
-        el2.style.cssText=`background:${STATUS_COLORS[post.status]||"#9ca3af"};color:#fff;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;`;
-        el2.textContent=TYPE_LABELS[post.type]||"Post";
-        el2.onclick=e=>{e.stopPropagation();openEditPost(post.id);};
-        cell.appendChild(el2);
+        el2.style.cssText=`background:${STATUS_COLORS[post.status]||"#9ca3af"};color:#fff;border-radius:4px;padding:2px 4px;font-size:9px;font-weight:600;margin-bottom:2px;display:flex;align-items:center;gap:3px;min-width:0;`;
+        const label=document.createElement("span");
+        label.style.cssText="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer";
+        label.textContent=TYPE_LABELS[post.type]||"Post";
+        label.title="Edit post";
+        label.onclick=e=>{e.stopPropagation();openEditPost(post.id);};
+        const edit=document.createElement("button");edit.type="button";edit.textContent="✏️";edit.title="Edit post";edit.style.cssText="border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:3px;padding:0 2px;font-size:8px;cursor:pointer;line-height:16px";edit.onclick=e=>{e.stopPropagation();openEditPost(post.id);};
+        const del=document.createElement("button");del.type="button";del.textContent="🗑️";del.title="Delete post";del.style.cssText="border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:3px;padding:0 2px;font-size:8px;cursor:pointer;line-height:16px";del.onclick=e=>{e.stopPropagation();deleteSocialPostFromCalendar(post.id);};
+        el2.append(label,edit,del);cell.appendChild(el2);
       });
       if(posts.length>2){const more=document.createElement("div");more.style.cssText="font-size:9px;color:var(--navy);font-weight:700;";more.textContent="+"+(posts.length-2)+" more";cell.appendChild(more);}
       cell.onclick=()=>{document.getElementById("sp-date").value=dateStr;openSocialPost("scheduled");};
@@ -2437,10 +2495,11 @@ function renderSocialCalendar(){
       const posts=(db.socialPosts||[]).filter(p=>p.date===dateStr);
       posts.forEach(post=>{
         const el2=document.createElement("div");
-        el2.style.cssText=`background:${STATUS_COLORS[post.status]||"#9ca3af"};color:#fff;border-radius:5px;padding:3px 7px;font-size:10px;font-weight:600;margin-bottom:3px;cursor:pointer;`;
-        el2.textContent=(TYPE_LABELS[post.type]||"Post")+(post.time?" "+post.time:"");
-        el2.onclick=e=>{e.stopPropagation();openEditPost(post.id);};
-        cell.appendChild(el2);
+        el2.style.cssText=`background:${STATUS_COLORS[post.status]||"#9ca3af"};color:#fff;border-radius:5px;padding:3px 5px;font-size:10px;font-weight:600;margin-bottom:3px;display:flex;align-items:center;gap:4px;`;
+        const label=document.createElement("span");label.style.cssText="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer";label.textContent=(TYPE_LABELS[post.type]||"Post")+(post.time?" "+post.time:"");label.onclick=e=>{e.stopPropagation();openEditPost(post.id);};
+        const edit=document.createElement("button");edit.type="button";edit.textContent="✏️";edit.title="Edit post";edit.style.cssText="border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:4px;padding:1px 3px;font-size:9px;cursor:pointer";edit.onclick=e=>{e.stopPropagation();openEditPost(post.id);};
+        const del=document.createElement("button");del.type="button";del.textContent="🗑️";del.title="Delete post";del.style.cssText="border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:4px;padding:1px 3px;font-size:9px;cursor:pointer";del.onclick=e=>{e.stopPropagation();deleteSocialPostFromCalendar(post.id);};
+        el2.append(label,edit,del);cell.appendChild(el2);
       });
       cell.onclick=()=>{document.getElementById("sp-date").value=dateStr;openSocialPost("scheduled");};
       grid.appendChild(cell);
@@ -2552,6 +2611,36 @@ function deleteCurrentPost(){
   db.socialPosts=(db.socialPosts||[]).filter(p=>String(p.id)!==String(editPostId));
   editPostId=null;saveDB();closeModal("m-social-post");renderSocialPage();showToast("Post deleted!");
 }
+
+function deleteSocialPostFromCalendar(id){
+  const post=(db.socialPosts||[]).find(p=>String(p.id)===String(id));
+  if(!post)return;
+  if(!confirm("Delete this scheduled post?"))return;
+  db.socialPosts=(db.socialPosts||[]).filter(p=>String(p.id)!==String(id));
+  saveDB();renderSocialCalendar();renderSocialScheduled();renderSocialIdeas();showToast("Post deleted!");
+}
+
+function ensureSocialInstructions(){if(!Array.isArray(db.socialInstructions))db.socialInstructions=[];}
+function socialInstructionEsc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function renderSocialInstructions(){
+  const el=document.getElementById("social-instructions-list");if(!el)return;ensureSocialInstructions();
+  const owner=ctCurrentUser&&ctCurrentUser.role==="Owner";
+  if(!db.socialInstructions.length){el.innerHTML='<div class="empty" style="padding:16px 8px"><div class="empty-icon">📄</div><p>No instruction PDFs uploaded yet.</p></div>';return;}
+  el.innerHTML=db.socialInstructions.map(x=>`<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)">
+    <div style="font-size:20px">📄</div><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${socialInstructionEsc(x.title||x.name)}</div><div style="font-size:10px;color:var(--soft)">${x.uploadedAt?new Date(x.uploadedAt).toLocaleDateString():''}</div></div>
+    <button class="btn btn-secondary btn-sm" onclick="downloadSocialInstruction('${x.id}')">Open</button>
+    ${owner?`<button class="btn-icon" title="Rename" onclick="renameSocialInstruction('${x.id}')">✏️</button><button class="btn-icon" title="Delete" onclick="deleteSocialInstruction('${x.id}')">🗑️</button>`:''}
+  </div>`).join('');
+}
+function handleSocialInstructionUpload(input){
+  if(!ctCurrentUser||ctCurrentUser.role!=="Owner"){input.value="";return;}ensureSocialInstructions();const files=[...(input.files||[])].filter(f=>f.type==="application/pdf"||/\.pdf$/i.test(f.name));
+  if(!files.length){showToast("Choose a PDF file.");input.value="";return;}
+  let pending=files.length;
+  files.forEach(file=>{const r=new FileReader();r.onload=()=>{const suggested=file.name.replace(/\.pdf$/i,"");const title=prompt("Instruction title:",suggested)||suggested;db.socialInstructions.push({id:"insi"+Date.now()+Math.random().toString(36).slice(2,6),name:file.name,title,data:r.result,uploadedAt:new Date().toISOString()});pending--;if(!pending){saveDB();renderSocialInstructions();showToast("Instructions uploaded!");input.value="";}};r.onerror=()=>{pending--;if(!pending)input.value="";};r.readAsDataURL(file);});
+}
+function downloadSocialInstruction(id){const x=(db.socialInstructions||[]).find(a=>a.id===id);if(!x||!x.data)return;const a=document.createElement("a");a.href=x.data;a.download=x.name||((x.title||"instructions")+".pdf");a.target="_blank";document.body.appendChild(a);a.click();a.remove();}
+function renameSocialInstruction(id){if(!ctCurrentUser||ctCurrentUser.role!=="Owner")return;const x=(db.socialInstructions||[]).find(a=>a.id===id);if(!x)return;const v=prompt("Instruction title:",x.title||x.name);if(v&&v.trim()){x.title=v.trim();saveDB();renderSocialInstructions();}}
+function deleteSocialInstruction(id){if(!ctCurrentUser||ctCurrentUser.role!=="Owner")return;if(!confirm("Delete this instruction PDF?"))return;db.socialInstructions=(db.socialInstructions||[]).filter(x=>x.id!==id);saveDB();renderSocialInstructions();showToast("Instruction removed!");}
 
 // ── MY BUSINESS ───────────────────────────────────────────────────────────────
 if(!db.bizGoals)db.bizGoals=[
@@ -3885,8 +3974,8 @@ renderDash=function(){
     <div id="social-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;overflow:hidden"><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer; opacity: 0.5;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">26</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer; opacity: 0.5;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">27</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer; opacity: 0.5;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">28</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer; opacity: 0.5;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">29</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer; opacity: 0.5;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">30</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer; opacity: 0.5;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">31</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">1</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">2</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">3</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">4</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">5</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">6</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">7</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">8</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">9</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">10</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">11</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">12</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">13</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">14</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">15</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">16</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">17</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">18</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">19</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">20</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer; background: var(--navy-light);"><div style="font-size: 11px; font-weight: 700; color: rgb(255, 255, 255); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--navy);">21</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">22</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">23</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">24</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">25</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">26</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">27</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">28</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">29</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">30</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">31</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer; opacity: 0.5;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">1</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer; opacity: 0.5;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">2</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer; opacity: 0.5;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">3</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer; opacity: 0.5;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">4</div></div><div style="min-height: 70px; max-height: 90px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; cursor: pointer; opacity: 0.5;"><div style="font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">5</div></div></div>
   </div>
 
-  <!-- Post Queue -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+  <!-- Post Queue + Instructions -->
+  <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(260px,.8fr);gap:14px;align-items:start">
     <div class="card">
       <div class="card-title">📤 Scheduled Posts</div>
       <div id="social-scheduled"><div class="empty"><p>No scheduled posts yet.</p></div></div>
@@ -3911,6 +4000,15 @@ renderDash=function(){
     
   </div></div>
       <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="openSocialPost('idea')">+ Add Idea</button>
+    </div>
+    <div class="card" id="social-instructions-card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>📚 Instructions</span>
+        <button class="btn btn-secondary btn-sm ct-owner-only" data-owner-only="1" onclick="document.getElementById('social-instructions-file').click()">+ Add PDF</button>
+      </div>
+      <input id="social-instructions-file" type="file" accept="application/pdf,.pdf" multiple style="display:none" onchange="handleSocialInstructionUpload(this)">
+      <div style="font-size:11px;color:var(--soft);margin-bottom:10px">Canva, graphic design, CRM, and social media guides.</div>
+      <div id="social-instructions-list"></div>
     </div>
   </div>
 
@@ -4702,6 +4800,7 @@ function ctUnlockPortal(){
   document.body.classList.remove("auth-locked");
   ctEnsureEmployees();
   const displayName=ctAccountDisplayName();
+  if(ctCurrentUser){ctCurrentUser.name=displayName;sessionStorage.setItem("ct_auth",JSON.stringify({id:ctCurrentUser.id,name:displayName,role:ctCurrentUser.role,email:ctCurrentUser.email}));}
   document.getElementById("ct-user-name").textContent=displayName;
   document.getElementById("ct-user-role").textContent=ctCurrentUser?.role||"Admin";
   document.getElementById("ct-user-avatar").textContent=(displayName||"A").charAt(0).toUpperCase();
@@ -4728,9 +4827,10 @@ function ctInjectWelcome(){
   w.innerHTML=`<div><h3>Welcome back, ${label}! 👋</h3></div><div style="font-size:12px;opacity:.8">${new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"})}</div>`;
 }
 const ctOldRenderDash=renderDash;
-renderDash=function(){ctOldRenderDash();ctInjectWelcome();};
+renderDash=function(){ctOldRenderDash();ctInjectWelcome();ctRenderTaskDashboard();};
 function ctEnsureEmployees(){
   if(!db.employees)db.employees=[];
+  if(!Array.isArray(db.adminTasks))db.adminTasks=[];
   if(!db.employeeCounter)db.employeeCounter=1;
   const defaults=[
     {id:"emp-owner",name:"Francesca",email:"francesca@checktutors.com",phone:"",type:"admin",role:"Owner",title:"Owner / Administrator",status:"Active",startDate:"",notes:"Primary owner account."},
@@ -4749,7 +4849,7 @@ function renderEmployeesPage(){
   if(!items.length){list.innerHTML='<div class="empty"><div class="empty-icon">👥</div><p>No employees in this category yet.</p></div>';return;}
   list.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px">${items.map(e=>{
     const self=ctCurrentUser&&e.id===ctCurrentUser.id,protectedOwner=ctCurrentUser?.role==="Admin"&&e.role==="Owner";
-    return `<div class="employee-card"><div class="employee-avatar">${ctEsc((e.name||"E").split(" ").map(x=>x[0]).join("").slice(0,2))}</div><div style="flex:1;min-width:0"><div style="font-weight:800;color:var(--navy)">${ctEsc(e.name)} ${self?'<span class="badge b-purple">You</span>':''}</div><div style="font-size:12px;color:var(--soft);margin-top:2px">${ctEsc(e.title||e.role||"")}</div><div style="font-size:11px;color:var(--soft);margin-top:5px">${ctEsc(e.email||"")} · <span class="badge ${e.status==="Active"?"b-green":"b-gray"}">${ctEsc(e.status||"Active")}</span></div></div>${ctCurrentUser?.role==="Owner"&&e.type==="admin"&&e.role!=="Owner"?`<button class="btn btn-primary btn-sm" onclick="ctOpenEmployeeTimesheet('${ctEsc(e.email)}','${ctEsc(e.name)}')">⏱️ Timesheet</button>`:''}<button class="btn btn-secondary btn-sm" onclick="openEmployeeModal('${e.id}')">${protectedOwner?"👁 View":"✎ Edit"}</button></div>`;
+    return `<div class="employee-card"><div class="employee-avatar">${ctEsc((e.name||"E").split(" ").map(x=>x[0]).join("").slice(0,2))}</div><div style="flex:1;min-width:0"><div style="font-weight:800;color:var(--navy)">${ctEsc(e.name)} ${self?'<span class="badge b-purple">You</span>':''}</div><div style="font-size:12px;color:var(--soft);margin-top:2px">${ctEsc(e.title||e.role||"")}</div><div style="font-size:11px;color:var(--soft);margin-top:5px">${ctEsc(e.email||"")} · <span class="badge ${e.status==="Active"?"b-green":"b-gray"}">${ctEsc(e.status||"Active")}</span>${ctCurrentUser?.role==="Owner"&&e.type==="admin"&&e.email?` · ${(db.adminTasks||[]).filter(t=>(t.assignedTo||'').toLowerCase()===(e.email||'').toLowerCase()&&t.status!=='completed').length} open task(s)`:''}</div></div>${ctCurrentUser?.role==="Owner"&&e.type==="admin"&&e.role!=="Owner"?`<button class="btn btn-primary btn-sm" onclick="ctOpenEmployeeTimesheet('${ctEsc(e.email)}','${ctEsc(e.name)}')">⏱️ Timesheet</button>`:''}<button class="btn btn-secondary btn-sm" onclick="openEmployeeModal('${e.id}')">${protectedOwner?"👁 View":"✎ Edit"}</button></div>`;
   }).join("")}</div>`;
 }
 function ctEsc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
@@ -4777,7 +4877,7 @@ function openEmployeeModal(id=""){
   document.getElementById("emp-role-note").textContent=ownerLocked?"Owner profile is view-only for Admin accounts.":self?"Your own role is locked.":"";
   const del=document.getElementById("emp-delete-btn");del.style.display=e&&!self&&!ownerLocked?"inline-block":"none";
   const save=document.getElementById("emp-save-btn");if(save)save.style.display=ownerLocked?"none":"inline-block";
-  ctEmployeeTypeChanged();openModal("m-employee");
+  ctEmployeeTypeChanged();openModal("m-employee");;ctRenderEmployeeTaskPanel();
 }
 function ctEmployeeTypeChanged(){
   const type=document.getElementById("emp-type").value,role=document.getElementById("emp-role");
@@ -4793,7 +4893,10 @@ function saveEmployee(){
   e.name=name;e.email=document.getElementById("emp-email").value.trim();e.phone=document.getElementById("emp-phone").value.trim();
   if(!self&&!ownerLocked){e.type=document.getElementById("emp-type").value;e.role=document.getElementById("emp-role").value;}
   e.title=document.getElementById("emp-title").value.trim();e.status=document.getElementById("emp-status").value;e.startDate=document.getElementById("emp-start").value;e.notes=document.getElementById("emp-notes").value.trim();
-  saveDB();closeModal("m-employee");renderEmployeesPage();showToast("Employee saved!");
+  saveDB();
+  const authKey=(e.email||"").toLowerCase();if(CT_AUTH_USERS[authKey])CT_AUTH_USERS[authKey].name=e.name;
+  if(self&&ctCurrentUser){ctCurrentUser.name=e.name;sessionStorage.setItem("ct_auth",JSON.stringify({id:ctCurrentUser.id,name:e.name,role:ctCurrentUser.role,email:ctCurrentUser.email}));const un=document.getElementById("ct-user-name"),ua=document.getElementById("ct-user-avatar");if(un)un.textContent=e.name;if(ua)ua.textContent=(e.name||"A").charAt(0).toUpperCase();ctInjectWelcome();}
+  closeModal("m-employee");renderEmployeesPage();showToast("Employee saved!");
 }
 function deleteEmployeeFromModal(){
   const id=document.getElementById("emp-id").value,e=(db.employees||[]).find(x=>x.id===id);if(!e)return;
@@ -4801,6 +4904,59 @@ function deleteEmployeeFromModal(){
   if(ctCurrentUser?.role==="Admin"&&e.role==="Owner"){showToast("Only the Owner can remove the Owner profile.");return;}
   if(!confirm("Delete "+e.name+" from Employees?"))return;db.employees=db.employees.filter(x=>x.id!==id);saveDB();closeModal("m-employee");renderEmployeesPage();showToast("Employee deleted.");
 }
+function ctEnsureTaskData(){if(!Array.isArray(db.adminTasks))db.adminTasks=[];if(!db.adminTaskCounter)db.adminTaskCounter=1;}
+function ctTaskEsc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
+function ctTaskAdminEmployees(){ctEnsureEmployees();return (db.employees||[]).filter(e=>e.type==="admin"&&e.role!=="Owner"&&e.status!=="Archived"&&e.email);}
+function ctTaskStatusBadge(t){return t.status==="completed"?'<span class="badge b-green">✓ Completed</span>':'<span class="badge b-amber">Assigned</span>';}
+function ctTaskDateLabel(d){return d?fmt(d):'No due date';}
+function ctTaskFileToData(file,maxMb=8){return new Promise((resolve,reject)=>{if(!file){resolve(null);return;}if(file.size>maxMb*1024*1024){reject(new Error('File is too large. Please keep it under '+maxMb+' MB.'));return;}const r=new FileReader();r.onload=()=>resolve({name:file.name,type:file.type||'application/octet-stream',size:file.size,dataURL:r.result});r.onerror=()=>reject(r.error);r.readAsDataURL(file);});}
+function ctDownloadDataFile(f){if(!f?.dataURL)return;const a=document.createElement('a');a.href=f.dataURL;a.download=f.name||'attachment';document.body.appendChild(a);a.click();a.remove();}
+function ctOpenDataFile(f){if(!f?.dataURL)return;const w=window.open();if(w)w.location=f.dataURL;else ctDownloadDataFile(f);}
+function ctOpenAssignTask(id=''){
+  if(ctCurrentUser?.role!=='Owner')return;ctEnsureTaskData();const t=id?(db.adminTasks||[]).find(x=>x.id===id):null;
+  document.getElementById('ct-task-id').value=t?.id||'';document.getElementById('ct-task-edit-title').textContent=t?'✏️ Edit Assigned Task':'📌 Assign Task';
+  document.getElementById('ct-task-title').value=t?.title||'';document.getElementById('ct-task-due').value=t?.dueDate||'';document.getElementById('ct-task-details').value=t?.details||'';document.getElementById('ct-task-instruction-file').value='';
+  const sel=document.getElementById('ct-task-assignee'),admins=ctTaskAdminEmployees();sel.innerHTML=admins.map(e=>`<option value="${ctTaskEsc(e.email)}">${ctTaskEsc(e.name)} — ${ctTaskEsc(e.email)}</option>`).join('');if(t?.assignedTo)sel.value=t.assignedTo;
+  document.getElementById('ct-task-instruction-current').innerHTML=t?.instructionFile?`Current: <b>${ctTaskEsc(t.instructionFile.name)}</b> <button type="button" class="btn btn-secondary btn-sm" onclick="ctOpenDataFile((db.adminTasks||[]).find(x=>x.id==='${t.id}')?.instructionFile)">Open</button>`:'No PDF attached.';
+  document.getElementById('ct-task-delete-btn').style.display=t?'inline-block':'none';openModal('m-admin-task-edit');
+}
+async function ctSaveAssignedTask(){
+  if(ctCurrentUser?.role!=='Owner')return;ctEnsureTaskData();const id=document.getElementById('ct-task-id').value,title=document.getElementById('ct-task-title').value.trim(),assignedTo=document.getElementById('ct-task-assignee').value,dueDate=document.getElementById('ct-task-due').value,details=document.getElementById('ct-task-details').value.trim();if(!title){showToast('Add a task title.');return;}if(!assignedTo){showToast('Choose an Admin.');return;}
+  let t=id?(db.adminTasks||[]).find(x=>x.id===id):null;if(!t){t={id:'at'+Date.now(),status:'assigned',createdAt:new Date().toISOString()};db.adminTasks.unshift(t);}const emp=(db.employees||[]).find(e=>(e.email||'').toLowerCase()===assignedTo.toLowerCase());
+  t.title=title;t.assignedTo=assignedTo;t.assignedToName=emp?.name||assignedTo;t.assignedBy=ctAccountDisplayName();t.assignedByEmail=ctCurrentUser?.email||'';t.dueDate=dueDate;t.details=details;t.updatedAt=new Date().toISOString();
+  const file=document.getElementById('ct-task-instruction-file').files?.[0];if(file){if(!(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf'))){showToast('Instructions attachment must be a PDF.');return;}try{t.instructionFile=await ctTaskFileToData(file,8);}catch(e){alert(e.message);return;}}
+  saveDB();closeModal('m-admin-task-edit');ctRenderTaskDashboard();if(typeof ctRenderEmployeeTaskPanel==='function')ctRenderEmployeeTaskPanel();showToast('Task saved!');
+}
+window.ctDeleteTaskFromEdit=function(ev){if(ev){ev.preventDefault();ev.stopPropagation();}const id=(document.getElementById('ct-task-id')?.value||'').trim();if(!id){showToast('Could not find this task.');return;}if(ctCurrentUser?.role!=='Owner'){showToast('Only the Owner can delete assigned tasks.');return;}const task=(db.adminTasks||[]).find(x=>x.id===id);if(!task){showToast('Task was already removed.');closeModal('m-admin-task-edit');ctRenderTaskDashboard();return;}if(!confirm('Delete task “'+(task.title||'Untitled task')+'”?'))return;db.adminTasks=(db.adminTasks||[]).filter(x=>x.id!==id);saveDB();closeModal('m-admin-task-edit');closeModal('m-admin-task-view');ctRenderTaskDashboard();if(typeof ctRenderEmployeeTaskPanel==='function')ctRenderEmployeeTaskPanel();showToast('Task deleted.');};
+function ctTaskForCurrentAdmin(t){return ctCurrentUser?.role==='Admin'&&(t.assignedTo||'').toLowerCase()===(ctCurrentUser.email||'').toLowerCase();}
+function ctOpenTask(id){ctEnsureTaskData();const t=(db.adminTasks||[]).find(x=>x.id===id);if(!t)return;if(ctCurrentUser?.role!=='Owner'&&!ctTaskForCurrentAdmin(t))return;document.getElementById('ct-task-view-id').value=t.id;document.getElementById('ct-task-view-title').textContent='📌 '+t.title;document.getElementById('ct-task-view-meta').innerHTML=`Assigned by <b>${ctTaskEsc(t.assignedBy||'Owner')}</b> · Due ${ctTaskEsc(ctTaskDateLabel(t.dueDate))} · ${ctTaskStatusBadge(t)}`;
+  let body=`<div style="background:var(--navy-light);border-radius:12px;padding:14px"><div style="font-size:11px;font-weight:800;color:var(--soft);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Task Details</div><div style="font-size:13px;line-height:1.55;white-space:pre-wrap">${ctTaskEsc(t.details||'No additional details.')}</div></div>`;
+  if(t.instructionFile)body+=`<div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);padding:10px 12px;border-radius:10px"><div><b>📎 ${ctTaskEsc(t.instructionFile.name)}</b><div style="font-size:11px;color:var(--soft)">Task instructions</div></div><button class="btn btn-secondary btn-sm" onclick="ctOpenDataFile((db.adminTasks||[]).find(x=>x.id==='${t.id}')?.instructionFile)">Open PDF</button></div>`;
+  if(t.status==='completed'){body+=`<div style="margin-top:12px;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:12px;padding:13px"><div style="font-weight:800;color:var(--green);margin-bottom:6px">✓ Completed${t.completedAt?' · '+new Date(t.completedAt).toLocaleString():''}</div>${t.completionNotes?`<div style="font-size:13px;white-space:pre-wrap;margin-bottom:8px">${ctTaskEsc(t.completionNotes)}</div>`:''}${t.completionLink?`<a class="btn btn-secondary btn-sm" href="${ctTaskEsc(t.completionLink)}" target="_blank" rel="noopener">Open Completed Work ↗</a>`:''}${t.completionFile?` <button class="btn btn-secondary btn-sm" onclick="ctOpenDataFile((db.adminTasks||[]).find(x=>x.id==='${t.id}')?.completionFile)">Open ${ctTaskEsc(t.completionFile.name)}</button>`:''}</div>`;}
+  document.getElementById('ct-task-view-body').innerHTML=body;const completion=document.getElementById('ct-task-completion-area');completion.style.display=ctTaskForCurrentAdmin(t)&&t.status!=='completed'?'block':'none';document.getElementById('ct-task-completion-link').value=t.completionLink||'';document.getElementById('ct-task-completion-notes').value=t.completionNotes||'';document.getElementById('ct-task-completion-file').value='';document.getElementById('ct-task-completion-current').textContent=t.completionFile?'Current: '+t.completionFile.name:'';
+  const editBtn=document.getElementById('ct-task-owner-edit-btn'),reopen=document.getElementById('ct-task-reopen-btn');if(editBtn)editBtn.style.display=ctCurrentUser?.role==='Owner'?'inline-block':'none';if(reopen)reopen.style.display=ctCurrentUser?.role==='Owner'&&t.status==='completed'?'inline-block':'none';openModal('m-admin-task-view');
+}
+async function ctCompleteTask(){const id=document.getElementById('ct-task-view-id').value,t=(db.adminTasks||[]).find(x=>x.id===id);if(!t||!ctTaskForCurrentAdmin(t))return;const link=document.getElementById('ct-task-completion-link').value.trim(),notes=document.getElementById('ct-task-completion-notes').value.trim(),file=document.getElementById('ct-task-completion-file').files?.[0];if(link&&!/^https?:\/\//i.test(link)){showToast('Completed work link should start with http:// or https://');return;}if(file){try{t.completionFile=await ctTaskFileToData(file,8);}catch(e){alert(e.message);return;}}t.completionLink=link;t.completionNotes=notes;t.status='completed';t.completedAt=new Date().toISOString();t.completedBy=ctAccountDisplayName();saveDB();closeModal('m-admin-task-view');ctRenderTaskDashboard();showToast('Task marked complete!');}
+function ctEditTaskFromView(){if(ctCurrentUser?.role!=='Owner')return;const id=document.getElementById('ct-task-view-id').value;closeModal('m-admin-task-view');ctOpenAssignTask(id);}
+function ctReopenTask(){if(ctCurrentUser?.role!=='Owner')return;const id=document.getElementById('ct-task-view-id').value,t=(db.adminTasks||[]).find(x=>x.id===id);if(!t)return;t.status='assigned';t.completedAt='';t.completedBy='';saveDB();closeModal('m-admin-task-view');ctRenderTaskDashboard();showToast('Task reopened.');}
+function ctRenderTaskRows(tasks,ownerView=false){if(!tasks.length)return '<div class="empty" style="padding:18px"><div class="empty-icon">📌</div><p>No assigned tasks right now.</p></div>';return tasks.map(t=>{const overdue=t.status!=='completed'&&t.dueDate&&t.dueDate<today();const due=t.dueDate?fmt(t.dueDate):'No due date';return `<div onclick="ctOpenTask('${t.id}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid #f0f1f5"><div style="width:34px;height:34px;border-radius:10px;background:${t.status==='completed'?'#e8f5e9':'var(--navy-light)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">${t.status==='completed'?'✓':'📌'}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:800;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ctTaskEsc(t.title)}</div><div style="font-size:11px;color:${overdue?'var(--red)':'var(--soft)'};margin-top:2px">${ownerView?`Assigned to ${ctTaskEsc(t.assignedToName||t.assignedTo)} · `:''}Assigned by ${ctTaskEsc(t.assignedBy||'Owner')} · Due ${ctTaskEsc(due)}${overdue?' ⚠️ Overdue':''}</div></div>${ctTaskStatusBadge(t)}</div>`;}).join('');}
+function ctRenderEmployeeTaskPanel(){
+  const panel=document.getElementById('ct-employee-task-panel'),list=document.getElementById('ct-employee-task-list'),btn=document.getElementById('ct-employee-assign-task-btn');
+  if(!panel||!list)return;
+  const empId=document.getElementById('emp-id')?.value||'',e=(db.employees||[]).find(x=>x.id===empId);
+  const canSee=ctCurrentUser?.role==='Owner'&&e&&e.type==='admin'&&e.email;
+  panel.style.display=canSee?'block':'none';
+  if(!canSee){list.innerHTML='';return;}
+  const email=(e.email||'').toLowerCase();
+  const tasks=[...(db.adminTasks||[])].filter(t=>(t.assignedTo||'').toLowerCase()===email).sort((a,b)=>((a.status==='completed')-(b.status==='completed'))||((a.dueDate||'9999').localeCompare(b.dueDate||'9999')));
+  if(btn)btn.onclick=function(){closeModal('m-employee');ctOpenAssignTaskForEmployee(e.email);};
+  list.innerHTML=tasks.length?tasks.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--border);border-radius:10px;margin-bottom:7px;background:#fff"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:800;color:var(--navy)">${ctTaskEsc(t.title||'Untitled task')}</div><div style="font-size:11px;color:var(--soft);margin-top:2px">Due ${ctTaskEsc(ctTaskDateLabel(t.dueDate))} · ${t.status==='completed'?'Completed':'Assigned'}</div></div><button type="button" class="btn btn-secondary btn-sm" onclick="ctEditEmployeeTask('${t.id}')">✏️ Edit</button></div>`).join(''):'<div style="font-size:12px;color:var(--soft);padding:8px 0">No tasks assigned to this Admin yet.</div>';
+}
+window.ctOpenAssignTaskForEmployee=function(email){ctOpenAssignTask('');const sel=document.getElementById('ct-task-assignee');if(sel){sel.value=email;sel.dispatchEvent(new Event('change'));}};
+window.ctEditEmployeeTask=function(id){closeModal('m-employee');ctOpenAssignTask(id);};
+function ctRenderTaskDashboard(){ctEnsureTaskData();const ownerCard=document.getElementById('ct-owner-tasks-card'),ownerList=document.getElementById('ct-owner-task-list');if(ownerCard)ownerCard.style.display=ctCurrentUser?.role==='Owner'?'block':'none';if(ownerList&&ctCurrentUser?.role==='Owner'){const tasks=[...(db.adminTasks||[])].sort((a,b)=>((a.status==='completed')-(b.status==='completed'))||((a.dueDate||'9999').localeCompare(b.dueDate||'9999')));ownerList.innerHTML=ctRenderTaskRows(tasks,true);}
+  const exp=document.getElementById('d-expiring')?.closest('.card'),recent=document.getElementById('d-recent')?.closest('.card'),right=exp?.parentElement;let adminCard=document.getElementById('ct-admin-tasks-card');if(ctCurrentUser?.role==='Admin'){if(exp)exp.style.display='none';if(recent)recent.style.display='none';if(!adminCard&&right){adminCard=document.createElement('div');adminCard.className='card';adminCard.id='ct-admin-tasks-card';right.prepend(adminCard);}if(adminCard){adminCard.style.display='block';const mine=(db.adminTasks||[]).filter(ctTaskForCurrentAdmin).sort((a,b)=>((a.status==='completed')-(b.status==='completed'))||((a.dueDate||'9999').localeCompare(b.dueDate||'9999')));adminCard.innerHTML=`<div class="card-title" style="font-size:14px;color:var(--navy)">📌 TASKS ASSIGNED TO ME</div><div style="font-size:11px;color:var(--soft);margin:-4px 0 8px">Click a task to view instructions or submit completed work.</div>${ctRenderTaskRows(mine,false)}`;}}else{if(exp)exp.style.display='';if(recent)recent.style.display='';if(adminCard)adminCard.style.display='none';}}
+
 function ctBlobToDataURL(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.readAsDataURL(blob);});}
 function ctDataURLToBlob(dataURL){const parts=dataURL.split(","),mime=(parts[0].match(/:(.*?);/)||[])[1]||"application/pdf",bin=atob(parts[1]||""),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:mime});}
 async function ctExportSharedData(){
@@ -4817,7 +4973,7 @@ async function ctExportSharedData(){
     adminWages[e.email]=parseFloat(localStorage.getItem('ct_admin_wage_'+k)||'0')||0;
     try{adminTimesheetReviews[e.email]=JSON.parse(localStorage.getItem('ct_admin_timesheet_reviews_'+k)||'{}')||{};}catch(_){adminTimesheetReviews[e.email]={};}
   }
-  const payload={app:"Check Tutors CRM",format:"ct-crm-backup",version:5,exportedAt:new Date().toISOString(),exportedBy:{name:ctCurrentUser?.name||"Admin",role:ctCurrentUser?.role||"Admin"},db:sharedDb,freebieFiles,adminTimesheets,adminWages,adminTimesheetReviews};
+  const payload={app:"Check Tutors CRM",format:"ct-crm-backup",version:6,exportedAt:new Date().toISOString(),exportedBy:{name:ctCurrentUser?.name||"Admin",role:ctCurrentUser?.role||"Admin"},db:sharedDb,freebieFiles,adminTimesheets,adminWages,adminTimesheetReviews};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}),u=URL.createObjectURL(blob),a=document.createElement("a");
   a.href=u;a.download="CheckTutors_CRM_Data_"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);
   localStorage.setItem("ct_shared_export_at",payload.exportedAt);localStorage.setItem("ct_shared_export_by",payload.exportedBy.name);ctRenderDataMeta();showToast("Private CRM data downloaded!");
@@ -4883,14 +5039,13 @@ ctRestoreAuth();
 <!-- Account Timesheet Page -->
 <div class="page" id="page-timesheet">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-    <div><h2 style="font-size:22px;font-weight:800;color:var(--navy)">⏱️ My Timesheet</h2><div style="font-size:12px;color:var(--soft);margin-top:4px"></div></div>
+    <div><h2 style="font-size:22px;font-weight:800;color:var(--navy)">⏱️ My Timesheet</h2></div>
     <button class="btn btn-primary" onclick="ctOpenTimesheetEntry()">+ Log Hours</button>
   </div>
   <div class="card" style="margin-bottom:14px;padding:16px 18px">
     <div style="display:flex;align-items:end;justify-content:space-between;gap:14px;flex-wrap:wrap">
       <div>
         <div class="card-title" style="margin-bottom:5px">💵 Pay Settings</div>
-        <div style="font-size:12px;color:var(--soft)"></div>
       </div>
       <div class="field" style="min-width:180px"><label>Hourly Wage ($/hr)</label><input id="ct-ts-wage" type="number" min="0" step="0.01" placeholder="e.g. 22.00" oninput="ctSaveHourlyWage(this.value)"></div>
     </div>
@@ -5077,7 +5232,7 @@ ctRestoreAuth();
   window.ctOpenEmployeeTimesheet=function(email,name){if(ctCurrentUser?.role!=='Owner')return;document.getElementById('ots-email').value=email;document.getElementById('ots-title').textContent='⏱️ '+(name||'Admin')+' Timesheet';document.getElementById('ots-sub').textContent=email;const rows=getTSFor(email),sel=document.getElementById('ots-period');sel.innerHTML=payPeriodsAround(rows).map(p=>`<option value="${periodKey(p)}">${periodLabel(p)}</option>`).join('');document.getElementById('ots-wage').value=getWageFor(email)||'';ctRenderOwnerTimesheet();openModal('m-owner-timesheet');};
   window.ctRenderOwnerTimesheet=function(){
     if(ctCurrentUser?.role!=='Owner')return;const email=document.getElementById('ots-email').value,p=selectedOwnerPeriod(),rows=getTSFor(email).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),periodRows=rows.filter(r=>inPeriod(r,p)),wage=getWageFor(email),hours=periodRows.reduce((s,r)=>s+(Number(r.hours)||0),0),pay=hours*wage,reviews=getReviewsFor(email),rev=reviews[periodKey(p)]||{status:'pending',note:''};
-    document.getElementById('ots-stats').innerHTML=`<div class="stat-card c-navy"><div class="stat-label">Pay Period</div><div class="stat-value">${hours.toFixed(2)}h</div><div class="stat-sub">${periodLabel(p)}</div></div><div class="stat-card c-green"><div class="stat-label">Calculated Pay</div><div class="stat-value">$${pay.toFixed(2)}</div><div class="stat-sub">${wage?`$${wage.toFixed(2)}/hr`:''}</div></div><div class="stat-card ${rev.status==='approved'?'c-green':rev.status==='rejected'?'c-red':'c-amber'}"><div class="stat-label">Review Status</div><div class="stat-value" style="font-size:20px;text-transform:capitalize">${escTS(rev.status||'pending')}</div></div>`;
+    document.getElementById('ots-stats').innerHTML=`<div class="stat-card c-navy"><div class="stat-label">Pay Period</div><div class="stat-value">${hours.toFixed(2)}h</div><div class="stat-sub">${periodLabel(p)}</div></div><div class="stat-card c-green"><div class="stat-label">Calculated Pay</div><div class="stat-value">$${pay.toFixed(2)}</div><div class="stat-sub">${wage?`$${wage.toFixed(2)}/hr`:''}</div></div><div class="stat-card ${rev.status==='approved'?'c-green':rev.status==='rejected'?'c-red':'c-amber'}"><div class="stat-label">Review</div><div class="stat-value" style="font-size:20px;text-transform:capitalize">${escTS(rev.status||'pending')}</div></div>`;
     document.getElementById('ots-list').innerHTML=periodRows.length?`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Time</th><th>Hours</th><th>Pay</th><th></th></tr></thead><tbody>${periodRows.map(r=>`<tr><td>${fmt(r.date)}</td><td><span class="badge b-purple">${escTS(r.type)}</span></td><td>${r.description?escTS(r.description):'—'}</td><td>${escTS(r.start)}–${escTS(r.end)}</td><td><b>${Number(r.hours||0).toFixed(2)}h</b></td><td><b style="color:var(--green)">$${(Number(r.hours||0)*wage).toFixed(2)}</b></td><td><button class="btn-icon" onclick="ctOwnerOpenEntry('${r.id}')">✏️</button><button class="btn-icon" onclick="ctOwnerQuickDelete('${r.id}')">🗑️</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty"><div class="empty-icon">⏱️</div><p>No hours in this pay period.</p></div>';
     const label=rev.status==='approved'?'✅ Approved':rev.status==='rejected'?'❌ Rejected':'⏳ Pending review';document.getElementById('ots-review-summary').innerHTML=`<b>${label}</b>${rev.reviewedAt?` · ${new Date(rev.reviewedAt).toLocaleString()}`:''}${rev.reviewedBy?` · by ${escTS(rev.reviewedBy)}`:''}`;document.getElementById('ots-review-note').value=rev.note||'';
   };
@@ -5090,7 +5245,7 @@ ctRestoreAuth();
 
   // Admin My Profile page, linked to employee record but role remains immutable.
   window.ctRenderAdminProfile=function(){if(!ctCurrentUser||ctCurrentUser.role!=='Admin')return;ctEnsureEmployees();const e=(db.employees||[]).find(x=>(x.email||'').toLowerCase()===acctEmail().toLowerCase())||{};document.getElementById('ct-ap-name').value=e.name||ctCurrentUser.name||'Admin';document.getElementById('ct-ap-email').value=acctEmail();document.getElementById('ct-ap-phone').value=e.phone||'';document.getElementById('ct-ap-title').value=e.title||'Administrator';document.getElementById('ct-ap-role').value='Admin';document.getElementById('ct-ap-start').value=e.startDate||'';document.getElementById('ct-ap-notes').value=e.notes||'';};
-  window.ctSaveAdminProfile=function(){if(!ctCurrentUser||ctCurrentUser.role!=='Admin')return;ctEnsureEmployees();let e=(db.employees||[]).find(x=>(x.email||'').toLowerCase()===acctEmail().toLowerCase());if(!e)return;e.name=document.getElementById('ct-ap-name').value.trim()||e.name;e.phone=document.getElementById('ct-ap-phone').value.trim();e.title=document.getElementById('ct-ap-title').value.trim()||'Administrator';e.startDate=document.getElementById('ct-ap-start').value;e.notes=document.getElementById('ct-ap-notes').value.trim();e.role='Admin';e.type='admin';saveDB();document.getElementById('ct-user-name').textContent=e.name;document.getElementById('ct-user-avatar').textContent=(e.name||'A').charAt(0).toUpperCase();ctInjectWelcome();showToast('Profile saved!');};
+  window.ctSaveAdminProfile=function(){if(!ctCurrentUser||ctCurrentUser.role!=='Admin')return;ctEnsureEmployees();let e=(db.employees||[]).find(x=>(x.email||'').toLowerCase()===acctEmail().toLowerCase());if(!e)return;e.name=document.getElementById('ct-ap-name').value.trim()||e.name;e.phone=document.getElementById('ct-ap-phone').value.trim();e.title=document.getElementById('ct-ap-title').value.trim()||'Administrator';e.startDate=document.getElementById('ct-ap-start').value;e.notes=document.getElementById('ct-ap-notes').value.trim();e.role='Admin';e.type='admin';saveDB();if(CT_AUTH_USERS[acctEmail().toLowerCase()])CT_AUTH_USERS[acctEmail().toLowerCase()].name=e.name;ctCurrentUser.name=e.name;sessionStorage.setItem('ct_auth',JSON.stringify({id:ctCurrentUser.id,name:e.name,role:ctCurrentUser.role,email:ctCurrentUser.email}));document.getElementById('ct-user-name').textContent=e.name;document.getElementById('ct-user-avatar').textContent=(e.name||'A').charAt(0).toUpperCase();ctInjectWelcome();renderEmployeesPage();showToast('Profile saved!');};
 
   // Extend page navigation for new account pages.
   const prevShow=window.showPage;
