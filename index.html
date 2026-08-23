@@ -198,6 +198,8 @@ tr:hover td{background:#fafafa}
     <div class="nav-tab" onclick="showPage('freebies')">🎁 Freebies</div>
     <div class="nav-tab" onclick="showPage('employees')">👥 Employees</div>
     <div class="nav-tab" onclick="showPage('business')">💼 Business</div>
+    <div class="nav-tab ct-admin-only" data-admin-only="1" onclick="showPage('timesheet')">⏱️ Timesheet</div>
+    <div class="nav-tab ct-admin-only" data-admin-only="1" onclick="showPage('adminprofile')">👤 My Profile</div>
     <div class="nav-tab active" onclick="showPage('settings')">⚙️ Settings</div>
   </div>
   <div class="ct-user-chip" id="ct-user-chip">
@@ -2279,7 +2281,8 @@ function drawBar(id,labels,data,color,label){const c=document.getElementById(id)
 // ── BACKUP & SETTINGS ─────────────────────────────────────────────────────────
 const BACKUP_KEY="ct_last_backup",BACKUP_HIST_KEY="ct_backup_history";
 function exportBackup(){
-  const dbJson=JSON.stringify(db);
+  const exportDb=JSON.parse(JSON.stringify(db));delete exportDb.todos;delete exportDb.todoCounter;
+  const dbJson=JSON.stringify(exportDb);
   const updatedHTML=document.documentElement.outerHTML.replace(/const SEED=\{[\s\S]*?\};(\s*function loadDB)/,"const SEED="+dbJson+";$1");
   const bkDate=new Date();const bkDD=String(bkDate.getDate()).padStart(2,"0");const bkMM=String(bkDate.getMonth()+1).padStart(2,"0");const bkYYYY=bkDate.getFullYear();const bkFileName="index.html "+bkDD+"-"+bkMM+"-"+bkYYYY; // DD-MM-YYYY: slash characters are not valid in Windows filenames
   const blob=new Blob([updatedHTML],{type:"text/html"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=bkFileName;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
@@ -4285,7 +4288,10 @@ renderDash=function(){
       </div>
     </div>
     <div class="card" style="margin-top:0">
-      <div class="card-title">🌟 Brand Colors</div>
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <span>🌟 Brand Colors</span>
+        <button class="btn btn-secondary btn-sm" onclick="addBrandColor()">+ Add Color</button>
+      </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
         <div style="display:flex;align-items:center;gap:8px">
           <div style="width:36px;height:36px;border-radius:8px;background:#2D3270;box-shadow:0 2px 8px rgba(0,0,0,.15)"></div>
@@ -4299,7 +4305,6 @@ renderDash=function(){
           <div style="width:36px;height:36px;border-radius:8px;background:#ffffff;border:1.5px solid #eee;box-shadow:0 2px 8px rgba(0,0,0,.07)"></div>
           <div><div style="font-weight:600;font-size:13px">White</div><div style="font-size:11px;color:var(--soft)">#FFFFFF</div></div>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="addBrandColor()" style="margin-left:8px">+ Add Color</button>
         <div id="custom-brand-colors" style="display:flex;gap:12px;flex-wrap:wrap"></div>
       </div>
     </div>
@@ -4713,7 +4718,7 @@ function ctInjectWelcome(){
   const page=document.getElementById("page-dashboard");if(!page)return;
   let w=document.getElementById("ct-welcome-banner");if(!w){w=document.createElement("div");w.id="ct-welcome-banner";w.className="ct-welcome";page.insertBefore(w,page.firstChild);}
   const label=ctCurrentUser?.role==="Owner"?"Francesca":"Admin";
-  w.innerHTML=`<div><h3>Welcome back, ${label}! 👋</h3><p>${ctCurrentUser?.role==="Owner"?"Your Check Tutors control centre.":"You’re signed into the Check Tutors Admin Portal."}</p></div><div style="font-size:12px;opacity:.8">${new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"})}</div>`;
+  w.innerHTML=`<div><h3>Welcome back, ${label}! 👋</h3></div><div style="font-size:12px;opacity:.8">${new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"})}</div>`;
 }
 const ctOldRenderDash=renderDash;
 renderDash=function(){ctOldRenderDash();ctInjectWelcome();};
@@ -4737,7 +4742,7 @@ function renderEmployeesPage(){
   if(!items.length){list.innerHTML='<div class="empty"><div class="empty-icon">👥</div><p>No employees in this category yet.</p></div>';return;}
   list.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px">${items.map(e=>{
     const self=ctCurrentUser&&e.id===ctCurrentUser.id,protectedOwner=ctCurrentUser?.role==="Admin"&&e.role==="Owner";
-    return `<div class="employee-card"><div class="employee-avatar">${ctEsc((e.name||"E").split(" ").map(x=>x[0]).join("").slice(0,2))}</div><div style="flex:1;min-width:0"><div style="font-weight:800;color:var(--navy)">${ctEsc(e.name)} ${self?'<span class="badge b-purple">You</span>':''}</div><div style="font-size:12px;color:var(--soft);margin-top:2px">${ctEsc(e.title||e.role||"")}</div><div style="font-size:11px;color:var(--soft);margin-top:5px">${ctEsc(e.email||"")} · <span class="badge ${e.status==="Active"?"b-green":"b-gray"}">${ctEsc(e.status||"Active")}</span></div></div><button class="btn btn-secondary btn-sm" onclick="openEmployeeModal('${e.id}')">${protectedOwner?"👁 View":"✎ Edit"}</button></div>`;
+    return `<div class="employee-card"><div class="employee-avatar">${ctEsc((e.name||"E").split(" ").map(x=>x[0]).join("").slice(0,2))}</div><div style="flex:1;min-width:0"><div style="font-weight:800;color:var(--navy)">${ctEsc(e.name)} ${self?'<span class="badge b-purple">You</span>':''}</div><div style="font-size:12px;color:var(--soft);margin-top:2px">${ctEsc(e.title||e.role||"")}</div><div style="font-size:11px;color:var(--soft);margin-top:5px">${ctEsc(e.email||"")} · <span class="badge ${e.status==="Active"?"b-green":"b-gray"}">${ctEsc(e.status||"Active")}</span></div></div>${ctCurrentUser?.role==="Owner"&&e.type==="admin"&&e.role!=="Owner"?`<button class="btn btn-primary btn-sm" onclick="ctOpenEmployeeTimesheet('${ctEsc(e.email)}','${ctEsc(e.name)}')">⏱️ Timesheet</button>`:''}<button class="btn btn-secondary btn-sm" onclick="openEmployeeModal('${e.id}')">${protectedOwner?"👁 View":"✎ Edit"}</button></div>`;
   }).join("")}</div>`;
 }
 function ctEsc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
@@ -4797,19 +4802,30 @@ async function ctExportSharedData(){
   try{
     for(const f of (db.freebies||[])){const blob=await getFreebieBlob(f.id);if(blob)freebieFiles[f.id]=await ctBlobToDataURL(blob);}
   }catch(e){console.warn("Some freebie PDFs could not be included",e);}
-  const payload={app:"Check Tutors CRM",format:"ct-crm-backup",version:3,exportedAt:new Date().toISOString(),exportedBy:{name:ctCurrentUser?.name||"Admin",role:ctCurrentUser?.role||"Admin"},db,freebieFiles};
+  const sharedDb=JSON.parse(JSON.stringify(db));delete sharedDb.todos;delete sharedDb.todoCounter;
+  const adminTimesheets={},adminWages={},adminTimesheetReviews={};
+  for(const e of (db.employees||[]).filter(x=>x.type==="admin"&&x.email)){
+    const k=String(e.email).toLowerCase().replace(/[^a-z0-9]/g,'_');
+    try{adminTimesheets[e.email]=JSON.parse(localStorage.getItem('ct_admin_timesheet_'+k)||'[]')||[];}catch(_){adminTimesheets[e.email]=[];}
+    adminWages[e.email]=parseFloat(localStorage.getItem('ct_admin_wage_'+k)||'0')||0;
+    try{adminTimesheetReviews[e.email]=JSON.parse(localStorage.getItem('ct_admin_timesheet_reviews_'+k)||'{}')||{};}catch(_){adminTimesheetReviews[e.email]={};}
+  }
+  const payload={app:"Check Tutors CRM",format:"ct-crm-backup",version:5,exportedAt:new Date().toISOString(),exportedBy:{name:ctCurrentUser?.name||"Admin",role:ctCurrentUser?.role||"Admin"},db:sharedDb,freebieFiles,adminTimesheets,adminWages,adminTimesheetReviews};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}),u=URL.createObjectURL(blob),a=document.createElement("a");
   a.href=u;a.download="CheckTutors_CRM_Data_"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);
   localStorage.setItem("ct_shared_export_at",payload.exportedAt);localStorage.setItem("ct_shared_export_by",payload.exportedBy.name);ctRenderDataMeta();showToast("Private CRM data downloaded!");
 }
 function ctImportSharedData(input){
   const file=input.files&&input.files[0];if(!file)return;const r=new FileReader();
-  r.onload=async()=>{try{const x=JSON.parse(r.result);const incoming=x.db||x;if(!incoming||!Array.isArray(incoming.students)||!Array.isArray(incoming.sessions)){throw new Error("Invalid CRM backup");}
+  r.onload=async()=>{try{const x=JSON.parse(r.result);const incoming=x.db||x;delete incoming.todos;delete incoming.todoCounter;if(!incoming||!Array.isArray(incoming.students)||!Array.isArray(incoming.sessions)){throw new Error("Invalid CRM backup");}
     const when=x.exportedAt?new Date(x.exportedAt).toLocaleString():"Unknown date",who=x.exportedBy?.name||"Unknown";
     const msg=`Import CRM data?\n\nBackup: ${when}\nCreated by: ${who}\nStudents: ${(incoming.students||[]).length}\nSessions: ${(incoming.sessions||[]).length}\nLeads: ${(incoming.leads||[]).length}\nFreebie PDFs: ${Object.keys(x.freebieFiles||{}).length}\n\nThis will replace the CRM data stored in THIS browser.`;
     if(!confirm(msg)){input.value="";return;}
     localStorage.setItem(DBKEY,JSON.stringify(incoming));
     for(const [id,dataURL] of Object.entries(x.freebieFiles||{})){try{await putFreebieBlob(id,ctDataURLToBlob(dataURL));}catch(e){console.warn("Could not restore freebie",id,e);}}
+    for(const [email,rows] of Object.entries(x.adminTimesheets||{})){const k=String(email).toLowerCase().replace(/[^a-z0-9]/g,'_');localStorage.setItem('ct_admin_timesheet_'+k,JSON.stringify(Array.isArray(rows)?rows:[]));}
+    for(const [email,wage] of Object.entries(x.adminWages||{})){const k=String(email).toLowerCase().replace(/[^a-z0-9]/g,'_');localStorage.setItem('ct_admin_wage_'+k,String(Math.max(0,parseFloat(wage)||0)));}
+    for(const [email,reviews] of Object.entries(x.adminTimesheetReviews||{})){const k=String(email).toLowerCase().replace(/[^a-z0-9]/g,'_');localStorage.setItem('ct_admin_timesheet_reviews_'+k,JSON.stringify(reviews&&typeof reviews==='object'?reviews:{}));}
     localStorage.setItem("ct_shared_import_at",new Date().toISOString());localStorage.setItem("ct_shared_import_source",file.name);db=loadDB();ctEnsureEmployees();ctRenderDataMeta();showToast("CRM data imported!");setTimeout(()=>location.reload(),450);
   }catch(e){console.error(e);alert("That file does not look like a valid Check Tutors CRM backup.");}input.value="";};r.readAsText(file);
 }
@@ -4822,4 +4838,265 @@ showPage=function(name){ctOldShowPage(name);if(name==="settings")ctRenderDataMet
 ctRestoreAuth();
 </script>
 
+
+<!-- Owner Employee Timesheet Review Modal -->
+<div class="overlay" id="m-owner-timesheet"><div class="modal" style="max-width:980px">
+  <div class="modal-hd"><div><div class="modal-title" id="ots-title">⏱️ Employee Timesheet</div><div id="ots-sub" style="font-size:12px;color:var(--soft);margin-top:3px"></div></div><button class="btn-icon" onclick="closeModal('m-owner-timesheet')">✕</button></div>
+  <input type="hidden" id="ots-email"><input type="hidden" id="ots-edit-id">
+  <div class="form-grid" style="margin-bottom:14px">
+    <div class="field"><label>Hourly Wage ($)</label><input id="ots-wage" type="number" min="0" step="0.01" onchange="ctOwnerSaveWage(this.value)"></div>
+    <div class="field"><label>Pay Period</label><select id="ots-period" onchange="ctRenderOwnerTimesheet()"></select></div>
+  </div>
+  <div class="stat-grid" id="ots-stats"></div>
+  <div class="card" style="box-shadow:none;border:1px solid var(--border)">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>🕒 Entries</span><button class="btn btn-primary btn-sm" onclick="ctOwnerOpenEntry()">+ Add / Correct Hours</button></div>
+    <div id="ots-list"></div>
+  </div>
+  <div class="card" style="box-shadow:none;border:1px solid var(--border);margin-top:12px">
+    <div class="card-title">✅ Owner Review</div>
+    <div id="ots-review-summary" style="font-size:13px;margin-bottom:10px"></div>
+    <div class="field"><label>Review Note</label><textarea id="ots-review-note" placeholder="Optional note for approval/rejection"></textarea></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-primary" onclick="ctReviewTimesheet('approved')">✓ Approve Pay Period</button><button class="btn btn-danger" onclick="ctReviewTimesheet('rejected')">✕ Reject Pay Period</button><button class="btn btn-secondary" onclick="ctReviewTimesheet('pending')">↺ Mark Pending</button></div>
+  </div>
+</div></div>
+
+<div class="overlay" id="m-owner-ts-entry"><div class="modal" style="max-width:560px">
+  <div class="modal-hd"><div class="modal-title" id="ots-entry-title">✏️ Edit Employee Hours</div><button class="btn-icon" onclick="closeModal('m-owner-ts-entry')">✕</button></div>
+  <div class="form-grid">
+    <div class="field"><label>Date</label><input id="ots-e-date" type="date"></div>
+    <div class="field"><label>Work Type</label><select id="ots-e-type"><option>Administration</option><option>Social Media</option><option>Marketing</option><option>Meetings</option><option>Training</option><option>Other</option></select></div>
+    <div class="field"><label>Start Time</label><input id="ots-e-start" type="time"></div>
+    <div class="field"><label>End Time</label><input id="ots-e-end" type="time"></div>
+    <div class="field form-full"><label>Description</label><input id="ots-e-desc" placeholder="What was worked on?"></div>
+    <div class="field form-full"><label>Notes</label><textarea id="ots-e-notes"></textarea></div>
+  </div>
+  <div class="modal-ft"><button class="btn btn-danger" id="ots-e-delete" onclick="ctOwnerDeleteEntry()">Delete</button><button class="btn btn-secondary" onclick="closeModal('m-owner-ts-entry')">Cancel</button><button class="btn btn-primary" onclick="ctOwnerSaveEntry()">Save Changes</button></div>
+</div></div>
+
+<!-- Account Timesheet Page -->
+<div class="page" id="page-timesheet">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <div><h2 style="font-size:22px;font-weight:800;color:var(--navy)">⏱️ My Timesheet</h2><div style="font-size:12px;color:var(--soft);margin-top:4px">Track the hours you work for Check Tutors. Your entries are included in shared CRM backups so the Owner can review payroll.</div></div>
+    <button class="btn btn-primary" onclick="ctOpenTimesheetEntry()">+ Log Hours</button>
+  </div>
+  <div class="card" style="margin-bottom:14px;padding:16px 18px">
+    <div style="display:flex;align-items:end;justify-content:space-between;gap:14px;flex-wrap:wrap">
+      <div>
+        <div class="card-title" style="margin-bottom:5px">💵 Pay Settings</div>
+        <div style="font-size:12px;color:var(--soft)">Your hourly wage is private to this admin account on this device.</div>
+      </div>
+      <div class="field" style="min-width:180px"><label>Hourly Wage ($/hr)</label><input id="ct-ts-wage" type="number" min="0" step="0.01" placeholder="e.g. 22.00" oninput="ctSaveHourlyWage(this.value)"></div>
+    </div>
+  </div>
+  <div class="stat-grid" id="ct-timesheet-stats"></div>
+  <div class="card">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span>🕒 Logged Hours</span><span id="ct-timesheet-period" style="font-size:11px;color:var(--soft);text-transform:none;letter-spacing:0"></span></div>
+    <div id="ct-timesheet-list"></div>
+  </div>
+</div>
+
+<!-- Admin Personal Profile Page -->
+<div class="page" id="page-adminprofile">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <div><h2 style="font-size:22px;font-weight:800;color:var(--navy)">👤 My Profile</h2><div style="font-size:12px;color:var(--soft);margin-top:4px">Your personal admin profile.</div></div>
+  </div>
+  <div class="card" style="max-width:760px">
+    <div class="card-title">👤 Admin Profile</div>
+    <div class="form-grid">
+      <div class="field"><label>Name</label><input id="ct-ap-name"></div>
+      <div class="field"><label>Email</label><input id="ct-ap-email" disabled></div>
+      <div class="field"><label>Phone</label><input id="ct-ap-phone" placeholder="Phone number"></div>
+      <div class="field"><label>Title</label><input id="ct-ap-title" placeholder="e.g. Administrator"></div>
+      <div class="field"><label>Role</label><input id="ct-ap-role" value="Admin" disabled></div>
+      <div class="field"><label>Start Date</label><input id="ct-ap-start" type="date"></div>
+      <div class="field form-full"><label>Notes</label><textarea id="ct-ap-notes" placeholder="Personal admin notes"></textarea></div>
+    </div>
+    <div style="margin-top:16px"><button class="btn btn-primary" onclick="ctSaveAdminProfile()">Save My Profile</button></div>
+  </div>
+</div>
+
+<!-- Timesheet Entry Modal -->
+<div class="overlay" id="m-ct-timesheet"><div class="modal" style="max-width:560px">
+  <div class="modal-hd"><div class="modal-title" id="ct-ts-modal-title">⏱️ Log Work Hours</div><button class="btn-icon" onclick="closeModal('m-ct-timesheet')">✕</button></div>
+  <input id="ct-ts-edit-id" type="hidden">
+  <div class="form-grid">
+    <div class="field"><label>Date</label><input id="ct-ts-date" type="date"></div>
+    <div class="field"><label>Work Type</label><select id="ct-ts-type"><option>Administration</option><option>Digital Marketing</option><option>Social Media</option><option>Meeting</option><option>Training</option><option>Other</option></select></div>
+    <div class="field"><label>Start Time</label><input id="ct-ts-start" type="time"></div>
+    <div class="field"><label>End Time</label><input id="ct-ts-end" type="time"></div>
+    <div class="field form-full"><label>Description</label><input id="ct-ts-desc" placeholder="What did you work on?"></div>
+    <div class="field form-full"><label>Notes</label><textarea id="ct-ts-notes" placeholder="Optional notes"></textarea></div>
+  </div>
+  <div class="modal-ft"><button class="btn btn-secondary" onclick="closeModal('m-ct-timesheet')">Cancel</button><button class="btn btn-primary" id="ct-ts-save-btn" onclick="ctSaveTimesheetEntry()">Log Hours</button></div>
+</div></div>
+
+<script>
+// === Check Tutors account-specific admin enhancements ===
+(function(){
+  const safeKey=s=>(s||'guest').toLowerCase().replace(/[^a-z0-9]+/g,'_');
+  function acctEmail(){return (window.ctCurrentUser&&ctCurrentUser.email)||'guest';}
+  function todoKey(){return 'ct_account_todos_'+safeKey(acctEmail());}
+  function todoCounterKey(){return 'ct_account_todo_counter_'+safeKey(acctEmail());}
+  window.ctGetAccountTodos=function(){
+    const key=todoKey();let v=localStorage.getItem(key);
+    if(v===null){
+      // One-time migration: existing owner tasks become Francesca's private tasks only.
+      const initial=(ctCurrentUser&&ctCurrentUser.role==='Owner'&&Array.isArray(db.todos))?db.todos:[];
+      localStorage.setItem(key,JSON.stringify(initial));v=JSON.stringify(initial);
+    }
+    try{return JSON.parse(v)||[];}catch(e){return[];}
+  };
+  window.ctSetAccountTodos=function(arr){localStorage.setItem(todoKey(),JSON.stringify(arr||[]));};
+  window.ctNextTodoId=function(){let n=parseInt(localStorage.getItem(todoCounterKey())||'1',10);localStorage.setItem(todoCounterKey(),String(n+1));return 'tdacct'+n;};
+
+  // Override To-Do functions so tasks belong to the signed-in account, not shared CRM data.
+  window.openEditTodo=function(id){
+    editTodoId=id;const t=ctGetAccountTodos().find(x=>x.id===id);if(!t)return;
+    const tt=document.getElementById('todo-text');if(tt)tt.value=t.text||'';
+    const tp=document.getElementById('todo-priority');if(tp)tp.value=t.priority||'normal';
+    const td=document.getElementById('todo-due');if(td)td.value=t.due||'';
+    const del=document.getElementById('btn-delete-todo');if(del)del.style.display='block';
+    const title=document.getElementById('todo-modal-title');if(title)title.textContent='Edit Task';openModal('m-todo');
+  };
+  window.saveTodo=function(){
+    const txt=document.getElementById('todo-text').value.trim();if(!txt){showToast('Task text required');return;}
+    let todos=ctGetAccountTodos(),old=editTodoId?todos.find(t=>t.id===editTodoId):null;
+    const todo={id:editTodoId||ctNextTodoId(),text:txt,priority:document.getElementById('todo-priority').value,due:document.getElementById('todo-due').value,done:old?.done||false,created:old?.created||today()};
+    if(editTodoId){const i=todos.findIndex(t=>t.id===editTodoId);if(i>=0)todos[i]=todo;else todos.push(todo);}else todos.push(todo);
+    ctSetAccountTodos(todos);editTodoId=null;closeModal('m-todo');renderTodos();showToast('Task saved!');
+  };
+  window.deleteCurrentTodo=function(){if(!editTodoId||!confirm('Delete this task?'))return;ctSetAccountTodos(ctGetAccountTodos().filter(t=>t.id!==editTodoId));editTodoId=null;closeModal('m-todo');renderTodos();showToast('Task deleted!');};
+  window.toggleTodo=function(id){let todos=ctGetAccountTodos(),t=todos.find(x=>x.id===id);if(!t)return;t.done=!t.done;ctSetAccountTodos(todos);renderTodos();};
+  window.renderTodos=function(){
+    const el=document.getElementById('todo-list'),emptyEl=document.getElementById('todo-empty');if(!el)return;const todos=ctGetAccountTodos();
+    const active=todos.filter(t=>!t.done).sort((a,b)=>{const po={high:0,normal:1,low:2};return (po[a.priority]||1)-(po[b.priority]||1)||(a.due||'z').localeCompare(b.due||'z');});const done=todos.filter(t=>t.done);
+    if(!todos.length){el.innerHTML='';if(emptyEl)emptyEl.style.display='block';return;}if(emptyEl)emptyEl.style.display='none';
+    const prColors={high:'var(--red)',normal:'var(--navy)',low:'var(--soft)'},prBg={high:'var(--red-light)',normal:'var(--navy-light)',low:'#f9fafb'};
+    const item=t=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 13px;background:${t.done?'#f9fafb':prBg[t.priority]||'var(--navy-light)'};border-radius:10px;border:1.5px solid ${(t.done?'#f0f0f0':prColors[t.priority]||'var(--navy-mid)')}22;${t.done?'opacity:.55':''}"><input type="checkbox" ${t.done?'checked':''} onchange="toggleTodo('${t.id}')" style="width:17px;height:17px;cursor:pointer;accent-color:${prColors[t.priority]||'var(--navy)'};flex-shrink:0"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;${t.done?'text-decoration:line-through;color:var(--soft)':'color:var(--text)'}">${t.text}</div>${t.due?`<div style="font-size:11px;color:${!t.done&&t.due<today()?'var(--red)':'var(--soft)'};margin-top:1px">Due: ${fmt(t.due)}${!t.done&&t.due<today()?' ⚠️ Overdue':''}</div>`:''}</div>${t.priority==='high'&&!t.done?'<span style="font-size:10px;background:var(--red-light);color:var(--red);padding:1px 6px;border-radius:99px;font-weight:700">!</span>':''}<button onclick="openEditTodo('${t.id}')" class="btn-icon" style="opacity:.5" title="Edit">✎</button></div>`;
+    el.innerHTML=active.map(item).join('')+(done.length?`<div style="font-size:11px;font-weight:700;color:var(--soft);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 6px;padding-left:2px">Completed (${done.length})</div>`+done.map(item).join(''):'');
+  };
+
+  // Admin-only menu handling.
+  const prevAccess=window.ctApplyRoleAccess;
+  window.ctApplyRoleAccess=function(){if(prevAccess)prevAccess();const isAdmin=ctCurrentUser&&ctCurrentUser.role==='Admin';document.querySelectorAll('.ct-admin-only,[data-admin-only="1"]').forEach(el=>el.style.display=isAdmin?'':'none');};
+
+  // Personal timesheet (local to signed-in admin account; intentionally not part of shared JSON backup).
+  // Admin timesheet + pay are account-specific and stay outside shared CRM backups.
+  function tsKey(){return 'ct_admin_timesheet_'+safeKey(acctEmail());}
+  function wageKey(){return 'ct_admin_wage_'+safeKey(acctEmail());}
+  function getTS(){try{return JSON.parse(localStorage.getItem(tsKey())||'[]')||[];}catch(e){return[];}}
+  function setTS(v){localStorage.setItem(tsKey(),JSON.stringify(v||[]));}
+  function getWage(){const v=parseFloat(localStorage.getItem(wageKey())||'0');return Number.isFinite(v)?v:0;}
+  window.ctSaveHourlyWage=function(v){const n=Math.max(0,parseFloat(v)||0);localStorage.setItem(wageKey(),String(n));ctRenderTimesheet();ctRenderAdminHoursDashboard();};
+  function escTS(v){return String(v??'').replace(/[&<>\"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+  function dateISO(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+  function payPeriodFor(dateObj=new Date()){
+    // Twice-monthly periods: 1st–14th, then 15th–last day of month.
+    const y=dateObj.getFullYear(),m=dateObj.getMonth(),day=dateObj.getDate();
+    const s=day<=14?new Date(y,m,1):new Date(y,m,15);
+    const e=day<=14?new Date(y,m,14):new Date(y,m+1,0);
+    return {start:s,end:e,startISO:dateISO(s),endISO:dateISO(e)};
+  }
+  function inPeriod(r,p){return !!r.date&&r.date>=p.startISO&&r.date<=p.endISO;}
+  function periodLabel(p){return `${p.start.toLocaleDateString(undefined,{month:'short',day:'numeric'})} – ${p.end.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}`;}
+  window.ctOpenTimesheetEntry=function(id){
+    const row=id?getTS().find(x=>x.id===id):null;
+    document.getElementById('ct-ts-edit-id').value=row?.id||'';
+    document.getElementById('ct-ts-date').value=row?.date||today();
+    document.getElementById('ct-ts-type').value=row?.type||'Administration';
+    document.getElementById('ct-ts-start').value=row?.start||'';
+    document.getElementById('ct-ts-end').value=row?.end||'';
+    document.getElementById('ct-ts-desc').value=row?.description||'';
+    document.getElementById('ct-ts-notes').value=row?.notes||'';
+    const title=document.getElementById('ct-ts-modal-title'),btn=document.getElementById('ct-ts-save-btn');
+    if(title)title.textContent=row?'✏️ Edit Work Hours':'⏱️ Log Work Hours';
+    if(btn)btn.textContent=row?'Save Changes':'Log Hours';
+    openModal('m-ct-timesheet');
+  };
+  window.ctEditTimesheet=function(id){ctOpenTimesheetEntry(id);};
+  window.ctSaveTimesheetEntry=function(){
+    const date=document.getElementById('ct-ts-date').value,start=document.getElementById('ct-ts-start').value,end=document.getElementById('ct-ts-end').value,desc=document.getElementById('ct-ts-desc').value.trim();
+    if(!date||!start||!end){showToast('Date, start time and end time are required');return;}
+    const [sh,sm]=start.split(':').map(Number),[eh,em]=end.split(':').map(Number);let mins=(eh*60+em)-(sh*60+sm);if(mins<=0)mins+=24*60;const hours=Math.round((mins/60)*100)/100;
+    const editId=document.getElementById('ct-ts-edit-id').value;let rows=getTS();
+    const entry={id:editId||('ts'+Date.now()),date,start,end,hours,type:document.getElementById('ct-ts-type').value,description:desc,notes:document.getElementById('ct-ts-notes').value.trim()};
+    if(editId){const i=rows.findIndex(x=>x.id===editId);if(i>=0)rows[i]=entry;else rows.unshift(entry);}else rows.unshift(entry);
+    setTS(rows);resetReviewForDate(acctEmail(),date);closeModal('m-ct-timesheet');ctRenderTimesheet();ctRenderAdminHoursDashboard();showToast(editId?'Timesheet entry updated!':'Hours logged!');
+  };
+  window.ctDeleteTimesheet=function(id){
+    const rows=getTS();const row=rows.find(x=>x.id===id);if(!row)return;
+    if(!confirm(`Delete ${row.hours.toFixed(2)} hours from ${row.date}?`))return;
+    resetReviewForDate(acctEmail(),row.date);setTS(rows.filter(x=>x.id!==id));ctRenderTimesheet();ctRenderAdminHoursDashboard();showToast('Timesheet entry deleted!');
+  };
+  window.ctRenderTimesheet=function(){
+    const rows=getTS().sort((a,b)=>(b.date||'').localeCompare(a.date||'')),stats=document.getElementById('ct-timesheet-stats'),list=document.getElementById('ct-timesheet-list');if(!stats||!list)return;
+    const wage=getWage(),wageInput=document.getElementById('ct-ts-wage');if(wageInput&&document.activeElement!==wageInput)wageInput.value=wage||'';
+    const now=new Date(),p=payPeriodFor(now),periodRows=rows.filter(r=>inPeriod(r,p));
+    const periodHours=periodRows.reduce((s,r)=>s+(Number(r.hours)||0),0),pay=periodHours*wage;
+    const monthPrefix=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,month=rows.filter(r=>(r.date||'').startsWith(monthPrefix)).reduce((s,r)=>s+(Number(r.hours)||0),0),total=rows.reduce((s,r)=>s+(Number(r.hours)||0),0);
+    const periodEl=document.getElementById('ct-timesheet-period');if(periodEl)periodEl.textContent='Current pay period: '+periodLabel(p);
+    stats.innerHTML=`<div class="stat-card c-navy"><div class="stat-label">Pay Period</div><div class="stat-value">${periodHours.toFixed(2)}h</div><div class="stat-sub">${periodLabel(p)}</div></div><div class="stat-card c-green"><div class="stat-label">Pay This Period</div><div class="stat-value">$${pay.toFixed(2)}</div><div class="stat-sub">${wage?`$${wage.toFixed(2)}/hr`:'Set hourly wage above'}</div></div><div class="stat-card c-blue"><div class="stat-label">This Month</div><div class="stat-value">${month.toFixed(2)}h</div></div><div class="stat-card c-amber"><div class="stat-label">All Logged</div><div class="stat-value">${total.toFixed(2)}h</div></div><div class="stat-card ${(getReviewsFor(acctEmail())[periodKey(p)]||{}).status==='approved'?'c-green':(getReviewsFor(acctEmail())[periodKey(p)]||{}).status==='rejected'?'c-red':'c-amber'}"><div class="stat-label">Owner Review</div><div class="stat-value" style="font-size:18px;text-transform:capitalize">${escTS((getReviewsFor(acctEmail())[periodKey(p)]||{}).status||'pending')}</div></div>`;
+    list.innerHTML=rows.length?`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Time</th><th>Hours</th><th>Pay</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td>${fmt(r.date)}</td><td><span class="badge b-purple">${escTS(r.type)}</span></td><td>${r.description?escTS(r.description):'<span style="color:var(--soft)">—</span>'}</td><td>${escTS(r.start)}–${escTS(r.end)}</td><td style="font-weight:800;color:var(--navy)">${Number(r.hours||0).toFixed(2)}h</td><td style="font-weight:800;color:var(--green)">$${(Number(r.hours||0)*wage).toFixed(2)}</td><td style="white-space:nowrap"><button class="btn-icon" type="button" onclick="ctEditTimesheet('${r.id}')" title="Edit">✏️</button><button class="btn-icon" type="button" onclick="ctDeleteTimesheet('${r.id}')" title="Delete">🗑️</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty"><div class="empty-icon">⏱️</div><p>No hours logged yet.</p></div>';
+  };
+  window.ctRenderAdminHoursDashboard=function(){
+    const card=document.getElementById('ct-admin-hours-card');if(card)card.remove();if(!ctCurrentUser||ctCurrentUser.role!=='Admin')return;
+    const page=document.getElementById('page-dashboard'),stats=document.getElementById('d-stats');if(!page||!stats)return;
+    const rows=getTS(),p=payPeriodFor(new Date()),periodRows=rows.filter(r=>inPeriod(r,p)),hours=periodRows.reduce((s,r)=>s+(Number(r.hours)||0),0),wage=getWage(),pay=hours*wage;
+    const wrap=document.createElement('div');wrap.id='ct-admin-hours-card';wrap.className='card';wrap.style.marginTop='14px';wrap.innerHTML=`<div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>💵 My Pay & Hours</span><button class="btn btn-primary btn-sm" onclick="showPage('timesheet')">Open Timesheet</button></div><div class="stat-grid" style="margin-bottom:0"><div class="stat-card c-navy"><div class="stat-label">Current Pay Period</div><div class="stat-value">${hours.toFixed(2)}h</div><div class="stat-sub">${periodLabel(p)}</div></div><div class="stat-card c-green"><div class="stat-label">Estimated Pay</div><div class="stat-value">$${pay.toFixed(2)}</div><div class="stat-sub">${wage?`$${wage.toFixed(2)}/hr`:'Set wage in Timesheet'}</div></div></div>`;
+    const todo=document.getElementById('dash-todo-card');if(todo)todo.parentNode.insertBefore(wrap,todo);else page.appendChild(wrap);
+  };
+
+
+  // Shared admin timesheets: exported/imported via JSON; Owner can review, correct, approve or reject.
+  function emailSafeKey(email){return String(email||'').toLowerCase().replace(/[^a-z0-9]/g,'_');}
+  function tsKeyFor(email){return 'ct_admin_timesheet_'+emailSafeKey(email);}
+  function wageKeyFor(email){return 'ct_admin_wage_'+emailSafeKey(email);}
+  function reviewsKeyFor(email){return 'ct_admin_timesheet_reviews_'+emailSafeKey(email);}
+  function getTSFor(email){try{return JSON.parse(localStorage.getItem(tsKeyFor(email))||'[]')||[];}catch(_){return[];}}
+  function setTSFor(email,rows){localStorage.setItem(tsKeyFor(email),JSON.stringify(rows||[]));}
+  function getWageFor(email){const n=parseFloat(localStorage.getItem(wageKeyFor(email))||'0');return Number.isFinite(n)?n:0;}
+  function setWageFor(email,n){localStorage.setItem(wageKeyFor(email),String(Math.max(0,parseFloat(n)||0)));}
+  function getReviewsFor(email){try{return JSON.parse(localStorage.getItem(reviewsKeyFor(email))||'{}')||{};}catch(_){return{};}}
+  function setReviewsFor(email,v){localStorage.setItem(reviewsKeyFor(email),JSON.stringify(v||{}));}
+  function periodKey(p){return p.startISO+'__'+p.endISO;}
+  function payPeriodsAround(rows){
+    const keys=new Map();
+    const nowP=payPeriodFor(new Date());keys.set(periodKey(nowP),nowP);
+    for(const r of rows||[]){if(!r.date)continue;const [y,m,d]=r.date.split('-').map(Number);if(!y||!m||!d)continue;const p=payPeriodFor(new Date(y,m-1,d));keys.set(periodKey(p),p);}
+    return [...keys.values()].sort((a,b)=>b.startISO.localeCompare(a.startISO));
+  }
+  function selectedOwnerPeriod(){const v=document.getElementById('ots-period')?.value||'';const [a,b]=v.split('__');if(!a||!b)return payPeriodFor(new Date());const [y1,m1,d1]=a.split('-').map(Number),[y2,m2,d2]=b.split('-').map(Number);return {start:new Date(y1,m1-1,d1),end:new Date(y2,m2-1,d2),startISO:a,endISO:b};}
+  function resetReviewForDate(email,date){if(!date)return;const [y,m,d]=date.split('-').map(Number);const p=payPeriodFor(new Date(y,m-1,d)),reviews=getReviewsFor(email),k=periodKey(p);if(reviews[k]?.status==='approved'||reviews[k]?.status==='rejected'){reviews[k]={status:'pending',note:'Hours changed after review.',reviewedAt:new Date().toISOString(),reviewedBy:ctCurrentUser?.name||'Owner'};setReviewsFor(email,reviews);}}
+  window.ctOpenEmployeeTimesheet=function(email,name){if(ctCurrentUser?.role!=='Owner')return;document.getElementById('ots-email').value=email;document.getElementById('ots-title').textContent='⏱️ '+(name||'Admin')+' Timesheet';document.getElementById('ots-sub').textContent=email;const rows=getTSFor(email),sel=document.getElementById('ots-period');sel.innerHTML=payPeriodsAround(rows).map(p=>`<option value="${periodKey(p)}">${periodLabel(p)}</option>`).join('');document.getElementById('ots-wage').value=getWageFor(email)||'';ctRenderOwnerTimesheet();openModal('m-owner-timesheet');};
+  window.ctRenderOwnerTimesheet=function(){
+    if(ctCurrentUser?.role!=='Owner')return;const email=document.getElementById('ots-email').value,p=selectedOwnerPeriod(),rows=getTSFor(email).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),periodRows=rows.filter(r=>inPeriod(r,p)),wage=getWageFor(email),hours=periodRows.reduce((s,r)=>s+(Number(r.hours)||0),0),pay=hours*wage,reviews=getReviewsFor(email),rev=reviews[periodKey(p)]||{status:'pending',note:''};
+    document.getElementById('ots-stats').innerHTML=`<div class="stat-card c-navy"><div class="stat-label">Pay Period</div><div class="stat-value">${hours.toFixed(2)}h</div><div class="stat-sub">${periodLabel(p)}</div></div><div class="stat-card c-green"><div class="stat-label">Calculated Pay</div><div class="stat-value">$${pay.toFixed(2)}</div><div class="stat-sub">${wage?`$${wage.toFixed(2)}/hr`:'Set hourly wage'}</div></div><div class="stat-card ${rev.status==='approved'?'c-green':rev.status==='rejected'?'c-red':'c-amber'}"><div class="stat-label">Review Status</div><div class="stat-value" style="font-size:20px;text-transform:capitalize">${escTS(rev.status||'pending')}</div></div>`;
+    document.getElementById('ots-list').innerHTML=periodRows.length?`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Time</th><th>Hours</th><th>Pay</th><th></th></tr></thead><tbody>${periodRows.map(r=>`<tr><td>${fmt(r.date)}</td><td><span class="badge b-purple">${escTS(r.type)}</span></td><td>${r.description?escTS(r.description):'—'}</td><td>${escTS(r.start)}–${escTS(r.end)}</td><td><b>${Number(r.hours||0).toFixed(2)}h</b></td><td><b style="color:var(--green)">$${(Number(r.hours||0)*wage).toFixed(2)}</b></td><td><button class="btn-icon" onclick="ctOwnerOpenEntry('${r.id}')">✏️</button><button class="btn-icon" onclick="ctOwnerQuickDelete('${r.id}')">🗑️</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty"><div class="empty-icon">⏱️</div><p>No hours in this pay period.</p></div>';
+    const label=rev.status==='approved'?'✅ Approved':rev.status==='rejected'?'❌ Rejected':'⏳ Pending review';document.getElementById('ots-review-summary').innerHTML=`<b>${label}</b>${rev.reviewedAt?` · ${new Date(rev.reviewedAt).toLocaleString()}`:''}${rev.reviewedBy?` · by ${escTS(rev.reviewedBy)}`:''}`;document.getElementById('ots-review-note').value=rev.note||'';
+  };
+  window.ctOwnerSaveWage=function(v){if(ctCurrentUser?.role!=='Owner')return;const email=document.getElementById('ots-email').value;setWageFor(email,v);ctRenderOwnerTimesheet();showToast('Hourly wage updated!');};
+  window.ctOwnerOpenEntry=function(id=''){if(ctCurrentUser?.role!=='Owner')return;const email=document.getElementById('ots-email').value,row=id?getTSFor(email).find(x=>x.id===id):null;document.getElementById('ots-edit-id').value=row?.id||'';document.getElementById('ots-e-date').value=row?.date||today();document.getElementById('ots-e-type').value=row?.type||'Administration';document.getElementById('ots-e-start').value=row?.start||'';document.getElementById('ots-e-end').value=row?.end||'';document.getElementById('ots-e-desc').value=row?.description||'';document.getElementById('ots-e-notes').value=row?.notes||'';document.getElementById('ots-entry-title').textContent=row?'✏️ Correct Employee Hours':'➕ Add Employee Hours';document.getElementById('ots-e-delete').style.display=row?'inline-block':'none';openModal('m-owner-ts-entry');};
+  window.ctOwnerSaveEntry=function(){if(ctCurrentUser?.role!=='Owner')return;const email=document.getElementById('ots-email').value,date=document.getElementById('ots-e-date').value,start=document.getElementById('ots-e-start').value,end=document.getElementById('ots-e-end').value;if(!date||!start||!end){showToast('Date, start time and end time are required');return;}const [sh,sm]=start.split(':').map(Number),[eh,em]=end.split(':').map(Number);let mins=(eh*60+em)-(sh*60+sm);if(mins<=0)mins+=1440;const hours=Math.round(mins/60*100)/100,id=document.getElementById('ots-edit-id').value;let rows=getTSFor(email);const old=rows.find(x=>x.id===id);if(old)resetReviewForDate(email,old.date);const entry={id:id||('ts'+Date.now()),date,start,end,hours,type:document.getElementById('ots-e-type').value,description:document.getElementById('ots-e-desc').value.trim(),notes:document.getElementById('ots-e-notes').value.trim(),ownerAdjusted:true,ownerAdjustedAt:new Date().toISOString()};if(id){const i=rows.findIndex(x=>x.id===id);if(i>=0)rows[i]=entry;else rows.unshift(entry);}else rows.unshift(entry);setTSFor(email,rows);resetReviewForDate(email,date);closeModal('m-owner-ts-entry');ctOpenEmployeeTimesheet(email,document.getElementById('ots-title').textContent.replace(/^⏱️ | Timesheet$/g,''));showToast('Employee timesheet updated!');};
+  window.ctOwnerDeleteEntry=function(){const id=document.getElementById('ots-edit-id').value;if(id)ctOwnerQuickDelete(id,true);};
+  window.ctOwnerQuickDelete=function(id,fromModal=false){if(ctCurrentUser?.role!=='Owner')return;const email=document.getElementById('ots-email').value,rows=getTSFor(email),row=rows.find(x=>x.id===id);if(!row)return;if(!confirm(`Delete ${Number(row.hours||0).toFixed(2)} hours from ${row.date}?`))return;resetReviewForDate(email,row.date);setTSFor(email,rows.filter(x=>x.id!==id));if(fromModal)closeModal('m-owner-ts-entry');ctRenderOwnerTimesheet();showToast('Employee timesheet entry deleted!');};
+  window.ctReviewTimesheet=function(status){if(ctCurrentUser?.role!=='Owner')return;const email=document.getElementById('ots-email').value,p=selectedOwnerPeriod(),reviews=getReviewsFor(email),note=document.getElementById('ots-review-note').value.trim();reviews[periodKey(p)]={status,note,reviewedAt:new Date().toISOString(),reviewedBy:ctCurrentUser?.name||'Francesca'};setReviewsFor(email,reviews);ctRenderOwnerTimesheet();showToast(status==='approved'?'Pay period approved!':status==='rejected'?'Pay period rejected.':'Pay period marked pending.');};
+
+  // Admin My Profile page, linked to employee record but role remains immutable.
+  window.ctRenderAdminProfile=function(){if(!ctCurrentUser||ctCurrentUser.role!=='Admin')return;ctEnsureEmployees();const e=(db.employees||[]).find(x=>(x.email||'').toLowerCase()===acctEmail().toLowerCase())||{};document.getElementById('ct-ap-name').value=e.name||ctCurrentUser.name||'Admin';document.getElementById('ct-ap-email').value=acctEmail();document.getElementById('ct-ap-phone').value=e.phone||'';document.getElementById('ct-ap-title').value=e.title||'Administrator';document.getElementById('ct-ap-role').value='Admin';document.getElementById('ct-ap-start').value=e.startDate||'';document.getElementById('ct-ap-notes').value=e.notes||'';};
+  window.ctSaveAdminProfile=function(){if(!ctCurrentUser||ctCurrentUser.role!=='Admin')return;ctEnsureEmployees();let e=(db.employees||[]).find(x=>(x.email||'').toLowerCase()===acctEmail().toLowerCase());if(!e)return;e.name=document.getElementById('ct-ap-name').value.trim()||e.name;e.phone=document.getElementById('ct-ap-phone').value.trim();e.title=document.getElementById('ct-ap-title').value.trim()||'Administrator';e.startDate=document.getElementById('ct-ap-start').value;e.notes=document.getElementById('ct-ap-notes').value.trim();e.role='Admin';e.type='admin';saveDB();document.getElementById('ct-user-name').textContent=e.name;showToast('Profile saved!');};
+
+  // Extend page navigation for new account pages.
+  const prevShow=window.showPage;
+  window.showPage=function(name){prevShow(name);document.querySelectorAll('.nav-tab').forEach(t=>{if((name==='timesheet'&&t.textContent.includes('Timesheet'))||(name==='adminprofile'&&t.textContent.includes('My Profile')))t.classList.add('active');});if(name==='timesheet')ctRenderTimesheet();if(name==='adminprofile')ctRenderAdminProfile();};
+
+  // Ensure dashboard/account views refresh after login and normal dashboard renders.
+  const prevUnlock=window.ctUnlockPortal;
+  window.ctUnlockPortal=function(){prevUnlock();ctApplyRoleAccess();renderTodos();ctRenderAdminHoursDashboard();};
+  const prevDash=window.renderDash;
+  window.renderDash=function(){prevDash();renderTodos();ctRenderAdminHoursDashboard();};
+
+  // If auth was already restored before this enhancement script ran, apply now.
+  if(window.ctCurrentUser){ctApplyRoleAccess();renderTodos();ctRenderAdminHoursDashboard();}
+})();
+</script>
 </body></html>
