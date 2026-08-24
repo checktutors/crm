@@ -2659,15 +2659,78 @@ function renderSocialInstructions(){
     ${owner?`<button class="btn-icon" title="Rename" onclick="renameSocialInstruction('${x.id}')">✏️</button><button class="btn-icon" title="Delete" onclick="deleteSocialInstruction('${x.id}')">🗑️</button>`:''}
   </div>`).join('');
 }
-function handleSocialInstructionUpload(input){
-  if(!ctCurrentUser||ctCurrentUser.role!=="Owner"){input.value="";return;}ensureSocialInstructions();const files=[...(input.files||[])].filter(f=>f.type==="application/pdf"||/\.pdf$/i.test(f.name));
+async function handleSocialInstructionUpload(input){
+  if(!ctCurrentUser||ctCurrentUser.role!=="Owner"){input.value="";return;}
+  ensureSocialInstructions();
+  const files=[...(input.files||[])].filter(f=>f.type==="application/pdf"||/\.pdf$/i.test(f.name));
   if(!files.length){showToast("Choose a PDF file.");input.value="";return;}
-  let pending=files.length;
-  files.forEach(file=>{const r=new FileReader();r.onload=()=>{const suggested=file.name.replace(/\.pdf$/i,"");const title=prompt("Instruction title:",suggested)||suggested;db.socialInstructions.push({id:"insi"+Date.now()+Math.random().toString(36).slice(2,6),name:file.name,title,data:r.result,uploadedAt:new Date().toISOString()});pending--;if(!pending){saveDB();renderSocialInstructions();showToast("Instructions uploaded!");input.value="";}};r.onerror=()=>{pending--;if(!pending)input.value="";};r.readAsDataURL(file);});
+  try{
+    for(const file of files){
+      const suggested=file.name.replace(/\.pdf$/i,"");
+      const title=(prompt("Instruction title:",suggested)||suggested).trim()||suggested;
+      const id="insi"+Date.now()+Math.random().toString(36).slice(2,7);
+      const storageKey="social_instruction_"+id;
+      await ctPutTaskBlob(storageKey,file);
+      db.socialInstructions.push({
+        id,
+        name:file.name,
+        title,
+        type:file.type||"application/pdf",
+        size:file.size||0,
+        storageKey,
+        uploadedAt:new Date().toISOString()
+      });
+    }
+    saveDB();
+    renderSocialInstructions();
+    showToast(files.length===1?"Instruction uploaded!":"Instructions uploaded!");
+  }catch(e){
+    console.error("Instruction upload failed",e);
+    alert("The instruction PDF could not be uploaded. "+(e?.message||"Please try again."));
+  }finally{
+    input.value="";
+  }
 }
-function downloadSocialInstruction(id){const x=(db.socialInstructions||[]).find(a=>a.id===id);if(!x||!x.data)return;const a=document.createElement("a");a.href=x.data;a.download=x.name||((x.title||"instructions")+".pdf");a.target="_blank";document.body.appendChild(a);a.click();a.remove();}
+async function downloadSocialInstruction(id){
+  const x=(db.socialInstructions||[]).find(a=>a.id===id);if(!x)return;
+  try{
+    if(x.data){
+      const a=document.createElement("a");a.href=x.data;a.download=x.name||((x.title||"instructions")+".pdf");a.target="_blank";document.body.appendChild(a);a.click();a.remove();return;
+    }
+    if(!x.storageKey){showToast("Instruction file could not be found.");return;}
+    const blob=await ctGetTaskBlob(x.storageKey);
+    if(!blob){showToast("Instruction PDF is not stored on this device. Import the newest CRM backup first.");return;}
+    const u=URL.createObjectURL(blob),w=window.open(u,"_blank");
+    if(!w){const a=document.createElement("a");a.href=u;a.download=x.name||((x.title||"instructions")+".pdf");document.body.appendChild(a);a.click();a.remove();}
+    setTimeout(()=>URL.revokeObjectURL(u),60000);
+  }catch(e){console.error(e);alert("Could not open this instruction PDF. "+(e?.message||""));}
+}
 function renameSocialInstruction(id){if(!ctCurrentUser||ctCurrentUser.role!=="Owner")return;const x=(db.socialInstructions||[]).find(a=>a.id===id);if(!x)return;const v=prompt("Instruction title:",x.title||x.name);if(v&&v.trim()){x.title=v.trim();saveDB();renderSocialInstructions();}}
-function deleteSocialInstruction(id){if(!ctCurrentUser||ctCurrentUser.role!=="Owner")return;if(!confirm("Delete this instruction PDF?"))return;db.socialInstructions=(db.socialInstructions||[]).filter(x=>x.id!==id);saveDB();renderSocialInstructions();showToast("Instruction removed!");}
+async function deleteSocialInstruction(id){
+  if(!ctCurrentUser||ctCurrentUser.role!=="Owner")return;
+  const x=(db.socialInstructions||[]).find(a=>a.id===id);
+  if(!x||!confirm("Delete this instruction PDF?"))return;
+  try{if(x.storageKey)await ctDeleteTaskBlob(x.storageKey);}catch(e){console.warn("Could not delete instruction blob",e);}
+  db.socialInstructions=(db.socialInstructions||[]).filter(y=>y.id!==id);
+  saveDB();renderSocialInstructions();showToast("Instruction removed!");
+}
+async function ctMigrateLegacySocialInstructions(){
+  let changed=false;
+  try{
+    ensureSocialInstructions();
+    for(const x of db.socialInstructions){
+      if(x?.data&&!x.storageKey){
+        const key="social_instruction_"+x.id;
+        await ctPutTaskBlob(key,ctDataURLToBlob(x.data));
+        x.storageKey=key;
+        x.type=x.type||"application/pdf";
+        delete x.data;
+        changed=true;
+      }
+    }
+    if(changed)saveDB();
+  }catch(e){console.warn("Legacy social instruction migration skipped",e);}
+}
 
 // ── MY BUSINESS ───────────────────────────────────────────────────────────────
 if(!db.bizGoals)db.bizGoals=[
@@ -5085,7 +5148,15 @@ async function ctExportSharedData(){
       }
     }
   }catch(e){console.warn("Some task attachments could not be included",e);}
+  const socialInstructionFiles={};
+  try{
+    for(const x of (db.socialInstructions||[])){
+      if(x.data){socialInstructionFiles[x.id]=x.data;continue;}
+      if(x.storageKey){const blob=await ctGetTaskBlob(x.storageKey);if(blob)socialInstructionFiles[x.id]=await ctBlobToDataURL(blob);}
+    }
+  }catch(e){console.warn("Some social instruction PDFs could not be included",e);}
   const sharedDb=JSON.parse(JSON.stringify(db));delete sharedDb.todos;delete sharedDb.todoCounter;
+  for(const x of (sharedDb.socialInstructions||[])){delete x.data;}
   for(const t of (sharedDb.adminTasks||[])){if(t.instructionFile)delete t.instructionFile.dataURL;if(t.completionFile)delete t.completionFile.dataURL;}
   const adminTimesheets={},adminWages={},adminTimesheetReviews={};
   for(const e of (db.employees||[]).filter(x=>x.type==="admin"&&x.email)){
@@ -5094,7 +5165,7 @@ async function ctExportSharedData(){
     adminWages[e.email]=parseFloat(localStorage.getItem('ct_admin_wage_'+k)||'0')||0;
     try{adminTimesheetReviews[e.email]=JSON.parse(localStorage.getItem('ct_admin_timesheet_reviews_'+k)||'{}')||{};}catch(_){adminTimesheetReviews[e.email]={};}
   }
-  const payload={app:"Check Tutors CRM",format:"ct-crm-backup",version:7,exportedAt:new Date().toISOString(),exportedBy:{name:ctCurrentUser?.name||"Admin",role:ctCurrentUser?.role||"Admin"},db:sharedDb,freebieFiles,taskFiles,adminTimesheets,adminWages,adminTimesheetReviews};
+  const payload={app:"Check Tutors CRM",format:"ct-crm-backup",version:8,exportedAt:new Date().toISOString(),exportedBy:{name:ctCurrentUser?.name||"Admin",role:ctCurrentUser?.role||"Admin"},db:sharedDb,freebieFiles,taskFiles,socialInstructionFiles,adminTimesheets,adminWages,adminTimesheetReviews};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}),u=URL.createObjectURL(blob),a=document.createElement("a");
   a.href=u;a.download="CheckTutors_CRM_Data_"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);
   localStorage.setItem("ct_shared_export_at",payload.exportedAt);localStorage.setItem("ct_shared_export_by",payload.exportedBy.name);ctRenderDataMeta();showToast("Private CRM data downloaded!");
@@ -5103,11 +5174,19 @@ function ctImportSharedData(input){
   const file=input.files&&input.files[0];if(!file)return;const r=new FileReader();
   r.onload=async()=>{try{const x=JSON.parse(r.result);const incoming=x.db||x;delete incoming.todos;delete incoming.todoCounter;if(!incoming||!Array.isArray(incoming.students)||!Array.isArray(incoming.sessions)){throw new Error("Invalid CRM backup");}
     const when=x.exportedAt?new Date(x.exportedAt).toLocaleString():"Unknown date",who=x.exportedBy?.name||"Unknown";
-    const msg=`Import CRM data?\n\nBackup: ${when}\nCreated by: ${who}\nStudents: ${(incoming.students||[]).length}\nSessions: ${(incoming.sessions||[]).length}\nLeads: ${(incoming.leads||[]).length}\nFreebie PDFs: ${Object.keys(x.freebieFiles||{}).length}\nTask attachments: ${Object.keys(x.taskFiles||{}).length}\n\nThis will replace the CRM data stored in THIS browser.`;
+    const msg=`Import CRM data?\n\nBackup: ${when}\nCreated by: ${who}\nStudents: ${(incoming.students||[]).length}\nSessions: ${(incoming.sessions||[]).length}\nLeads: ${(incoming.leads||[]).length}\nFreebie PDFs: ${Object.keys(x.freebieFiles||{}).length}\nTask attachments: ${Object.keys(x.taskFiles||{}).length}\nInstruction PDFs: ${Object.keys(x.socialInstructionFiles||{}).length}\n\nThis will replace the CRM data stored in THIS browser.`;
     if(!confirm(msg)){input.value="";return;}
     for(const [id,dataURL] of Object.entries(x.freebieFiles||{})){try{await putFreebieBlob(id,ctDataURLToBlob(dataURL));}catch(e){console.warn("Could not restore freebie",id,e);}}
     for(const [compound,dataURL] of Object.entries(x.taskFiles||{})){
       try{const [taskId,kind]=compound.split('::'),t=(incoming.adminTasks||[]).find(z=>z.id===taskId);if(!t)continue;const prop=kind==='completionFile'?'completionFile':'instructionFile',f=t[prop];if(!f)continue;const key=(prop==='completionFile'?'completion_':'instruction_')+taskId;await ctPutTaskBlob(key,ctDataURLToBlob(dataURL));f.storageKey=key;delete f.dataURL;}catch(e){console.warn("Could not restore task attachment",compound,e);}
+    }
+    for(const [id,dataURL] of Object.entries(x.socialInstructionFiles||{})){
+      try{
+        const f=(incoming.socialInstructions||[]).find(z=>z.id===id);if(!f)continue;
+        const key="social_instruction_"+id;
+        await ctPutTaskBlob(key,ctDataURLToBlob(dataURL));
+        f.storageKey=key;delete f.data;
+      }catch(e){console.warn("Could not restore social instruction PDF",id,e);}
     }
     localStorage.setItem(DBKEY,JSON.stringify(incoming));
     for(const [email,rows] of Object.entries(x.adminTimesheets||{})){const k=String(email).toLowerCase().replace(/[^a-z0-9]/g,'_');localStorage.setItem('ct_admin_timesheet_'+k,JSON.stringify(Array.isArray(rows)?rows:[]));}
@@ -5122,7 +5201,7 @@ function ctRenderDataMeta(){
 }
 const ctOldShowPage=showPage;
 showPage=function(name){ctOldShowPage(name);if(name==="settings")ctRenderDataMeta();if(name==="business")ctApplyRoleAccess();};
-ctRestoreAuth();
+ctMigrateLegacySocialInstructions();ctRestoreAuth();
 </script>
 
 
