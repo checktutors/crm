@@ -4876,13 +4876,15 @@ function ctLogin(event){
   const email=String(emailEl&&emailEl.value||"").trim().toLowerCase();
   const pass=String(passEl&&passEl.value||"");
   const ownerOK=email==="francesca@checktutors.com"&&pass==="f00tbaLL18!";
-  const adminOK=email==="admin@checktutors.com"&&pass==="0ttawa$tudy$pots!";
+  const adminEmployee=(db.employees||[]).find(e=>e.id==="emp-admin"||e.role==="Admin"&&e.type==="admin");
+  const currentAdminEmail=String(adminEmployee?.email||"admin@checktutors.com").trim().toLowerCase();
+  const adminOK=email===currentAdminEmail&&pass==="0ttawa$tudy$pots!";
   if(!ownerOK&&!adminOK){
     if(err){err.textContent="That email or password is not correct.";err.style.display="block";}
     return false;
   }
   const u=ownerOK?CT_AUTH_USERS["francesca@checktutors.com"]:CT_AUTH_USERS["admin@checktutors.com"];
-  ctCurrentUser={id:u.id,name:u.name,role:u.role,email:email};
+  ctCurrentUser={id:u.id,name:ownerOK?u.name:(adminEmployee?.name||u.name),role:u.role,email:email};
   if(err)err.style.display="none";
   if(button){button.disabled=true;button.textContent="Signing in…";}
   // Unlock first so local iPhone/file:// restrictions cannot block sign-in.
@@ -4902,7 +4904,18 @@ function ctLogin(event){
 }
 function ctLogout(){try{sessionStorage.removeItem("ct_auth");}catch(e){}ctCurrentUser=null;document.body.classList.add("auth-locked");document.getElementById("ct-login-password").value="";document.getElementById("ct-login-error").style.display="none";}
 function ctRestoreAuth(){
-  try{const saved=JSON.parse(sessionStorage.getItem("ct_auth")||"null");if(saved&&CT_AUTH_USERS[saved.email]){ctCurrentUser={...CT_AUTH_USERS[saved.email],email:saved.email};ctUnlockPortal();return;}}catch(e){}
+  try{
+    const saved=JSON.parse(sessionStorage.getItem("ct_auth")||"null");
+    if(saved&&saved.role==="Owner"&&saved.id==="emp-owner"){
+      const u=CT_AUTH_USERS["francesca@checktutors.com"];
+      ctCurrentUser={...u,email:"francesca@checktutors.com"};ctUnlockPortal();return;
+    }
+    if(saved&&saved.role==="Admin"&&saved.id==="emp-admin"){
+      const e=(db.employees||[]).find(x=>x.id==="emp-admin")||{};
+      ctCurrentUser={id:"emp-admin",name:e.name||saved.name||"Admin",role:"Admin",email:String(e.email||saved.email||"admin@checktutors.com").toLowerCase()};
+      ctUnlockPortal();return;
+    }
+  }catch(e){}
   document.body.classList.add("auth-locked");
 }
 function ctAccountDisplayName(){
@@ -5269,7 +5282,7 @@ ctMigrateLegacySocialInstructions();ctRestoreAuth();
     <div class="card-title">👤 Admin Profile</div>
     <div class="form-grid">
       <div class="field"><label>Name</label><input id="ct-ap-name"></div>
-      <div class="field"><label>Email</label><input id="ct-ap-email" disabled></div>
+      <div class="field"><label>Email</label><input id="ct-ap-email" type="email" placeholder="Email address"></div>
       <div class="field"><label>Phone</label><input id="ct-ap-phone" placeholder="Phone number"></div>
       <div class="field"><label>Title</label><input id="ct-ap-title" placeholder="e.g. Administrator"></div>
       <div class="field"><label>Role</label><input id="ct-ap-role" value="Admin" disabled></div>
@@ -5447,8 +5460,83 @@ ctMigrateLegacySocialInstructions();ctRestoreAuth();
   window.ctReviewTimesheet=function(status){if(ctCurrentUser?.role!=='Owner')return;const email=document.getElementById('ots-email').value,p=selectedOwnerPeriod(),reviews=getReviewsFor(email),note=document.getElementById('ots-review-note').value.trim();reviews[periodKey(p)]={status,note,reviewedAt:new Date().toISOString(),reviewedBy:ctCurrentUser?.name||'Francesca'};setReviewsFor(email,reviews);ctRenderOwnerTimesheet();showToast(status==='approved'?'Pay period approved!':status==='rejected'?'Pay period rejected.':'Pay period marked pending.');};
 
   // Admin My Profile page, linked to employee record but role remains immutable.
-  window.ctRenderAdminProfile=function(){if(!ctCurrentUser||ctCurrentUser.role!=='Admin')return;ctEnsureEmployees();const e=(db.employees||[]).find(x=>(x.email||'').toLowerCase()===acctEmail().toLowerCase())||{};document.getElementById('ct-ap-name').value=e.name||ctCurrentUser.name||'Admin';document.getElementById('ct-ap-email').value=acctEmail();document.getElementById('ct-ap-phone').value=e.phone||'';document.getElementById('ct-ap-title').value=e.title||'Administrator';document.getElementById('ct-ap-role').value='Admin';document.getElementById('ct-ap-start').value=e.startDate||'';document.getElementById('ct-ap-notes').value=e.notes||'';};
-  window.ctSaveAdminProfile=function(){if(!ctCurrentUser||ctCurrentUser.role!=='Admin')return;ctEnsureEmployees();let e=(db.employees||[]).find(x=>(x.email||'').toLowerCase()===acctEmail().toLowerCase());if(!e)return;e.name=document.getElementById('ct-ap-name').value.trim()||e.name;e.phone=document.getElementById('ct-ap-phone').value.trim();e.title=document.getElementById('ct-ap-title').value.trim()||'Administrator';e.startDate=document.getElementById('ct-ap-start').value;e.notes=document.getElementById('ct-ap-notes').value.trim();e.role='Admin';e.type='admin';saveDB();if(CT_AUTH_USERS[acctEmail().toLowerCase()])CT_AUTH_USERS[acctEmail().toLowerCase()].name=e.name;ctCurrentUser.name=e.name;sessionStorage.setItem('ct_auth',JSON.stringify({id:ctCurrentUser.id,name:e.name,role:ctCurrentUser.role,email:ctCurrentUser.email}));document.getElementById('ct-user-name').textContent=e.name;document.getElementById('ct-user-avatar').textContent=(e.name||'A').charAt(0).toUpperCase();ctInjectWelcome();renderEmployeesPage();showToast('Profile saved!');};
+  window.ctRenderAdminProfile=function(){
+    if(!ctCurrentUser||ctCurrentUser.role!=='Admin')return;
+    ctEnsureEmployees();
+    const e=(db.employees||[]).find(x=>x.id===ctCurrentUser.id)||(db.employees||[]).find(x=>(x.email||'').toLowerCase()===acctEmail().toLowerCase())||{};
+    document.getElementById('ct-ap-name').value=e.name||ctCurrentUser.name||'Admin';
+    document.getElementById('ct-ap-email').value=e.email||ctCurrentUser.email||'';
+    document.getElementById('ct-ap-phone').value=e.phone||'';
+    document.getElementById('ct-ap-title').value=e.title||'Administrator';
+    document.getElementById('ct-ap-role').value='Admin';
+    document.getElementById('ct-ap-start').value=e.startDate||'';
+    document.getElementById('ct-ap-notes').value=e.notes||'';
+  };
+  window.ctSaveAdminProfile=function(){
+    if(!ctCurrentUser||ctCurrentUser.role!=='Admin'){showToast('Admin login required.');return;}
+    try{
+      ctEnsureEmployees();
+      let e=(db.employees||[]).find(x=>x.id===ctCurrentUser.id)||(db.employees||[]).find(x=>(x.email||'').toLowerCase()===acctEmail().toLowerCase());
+      if(!e){showToast('Your employee profile could not be found.');return;}
+
+      const oldEmail=String(e.email||ctCurrentUser.email||'').trim().toLowerCase();
+      const newEmail=String(document.getElementById('ct-ap-email').value||'').trim().toLowerCase();
+      const newName=String(document.getElementById('ct-ap-name').value||'').trim();
+
+      if(!newName){showToast('Please enter your name.');return;}
+      if(!newEmail||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)){showToast('Please enter a valid email address.');return;}
+      const duplicate=(db.employees||[]).find(x=>x.id!==e.id&&String(x.email||'').trim().toLowerCase()===newEmail);
+      if(duplicate){showToast('That email is already used by another employee.');return;}
+
+      e.name=newName;
+      e.email=newEmail;
+      e.phone=document.getElementById('ct-ap-phone').value.trim();
+      e.title=document.getElementById('ct-ap-title').value.trim()||'Administrator';
+      e.startDate=document.getElementById('ct-ap-start').value;
+      e.notes=document.getElementById('ct-ap-notes').value.trim();
+      e.role='Admin';e.type='admin';
+
+      // Keep assigned tasks attached to this Admin when their email changes.
+      if(oldEmail&&oldEmail!==newEmail){
+        (db.adminTasks||[]).forEach(t=>{if(String(t.assignedTo||'').toLowerCase()===oldEmail)t.assignedTo=newEmail;});
+
+        // Move account-specific local data to the new email key.
+        const keySafe=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'_');
+        const moves=[
+          ['ct_account_todos_',''],
+          ['ct_account_todo_counter_',''],
+          ['ct_admin_timesheet_','[]'],
+          ['ct_admin_wage_','0'],
+          ['ct_admin_timesheet_reviews_','{}']
+        ];
+        for(const [prefix] of moves){
+          try{
+            const oldKey=prefix+keySafe(oldEmail),newKey=prefix+keySafe(newEmail);
+            const val=localStorage.getItem(oldKey);
+            if(val!==null&&localStorage.getItem(newKey)===null)localStorage.setItem(newKey,val);
+          }catch(_){}
+        }
+      }
+
+      saveDB();
+
+      CT_AUTH_USERS["admin@checktutors.com"].name=e.name;
+      ctCurrentUser.name=e.name;
+      ctCurrentUser.email=newEmail;
+      try{sessionStorage.setItem('ct_auth',JSON.stringify({id:e.id,name:e.name,role:'Admin',email:newEmail}));}catch(_){}
+
+      const un=document.getElementById('ct-user-name'),ua=document.getElementById('ct-user-avatar');
+      if(un)un.textContent=e.name;
+      if(ua)ua.textContent=(e.name||'A').charAt(0).toUpperCase();
+      ctInjectWelcome();
+      renderEmployeesPage();
+      ctRenderAdminProfile();
+      showToast('Profile saved!');
+    }catch(err){
+      console.error('Profile save failed',err);
+      alert('Your profile could not be saved. '+(err?.message||'Please try again.'));
+    }
+  };
 
   // Extend page navigation for new account pages.
   const prevShow=window.showPage;
