@@ -4955,20 +4955,40 @@ function ctTaskEsc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","
 function ctTaskAdminEmployees(){ctEnsureEmployees();return (db.employees||[]).filter(e=>e.type==="admin"&&e.role!=="Owner"&&e.status!=="Archived"&&e.email);}
 function ctTaskStatusBadge(t){return t.status==="completed"?'<span class="badge b-green">✓ Completed</span>':'<span class="badge b-amber">Assigned</span>';}
 function ctTaskDateLabel(d){return d?fmt(d):'No due date';}
+
+const CT_TASK_FILE_DB='check_tutors_task_files_v1',CT_TASK_FILE_STORE='files';
+function ctOpenTaskFileDB(){return new Promise((resolve,reject)=>{if(!('indexedDB' in window)){reject(new Error('This browser does not support file storage.'));return;}const r=indexedDB.open(CT_TASK_FILE_DB,1);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains(CT_TASK_FILE_STORE))d.createObjectStore(CT_TASK_FILE_STORE);};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+async function ctPutTaskBlob(key,blob){const d=await ctOpenTaskFileDB();return new Promise((res,rej)=>{const tx=d.transaction(CT_TASK_FILE_STORE,'readwrite');tx.objectStore(CT_TASK_FILE_STORE).put(blob,key);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+async function ctGetTaskBlob(key){const d=await ctOpenTaskFileDB();return new Promise((res,rej)=>{const r=d.transaction(CT_TASK_FILE_STORE,'readonly').objectStore(CT_TASK_FILE_STORE).get(key);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function ctDeleteTaskBlob(key){if(!key)return;try{const d=await ctOpenTaskFileDB();return new Promise((res,rej)=>{const tx=d.transaction(CT_TASK_FILE_STORE,'readwrite');tx.objectStore(CT_TASK_FILE_STORE).delete(key);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}catch(e){console.warn('Could not delete task attachment',e);}}
+function ctTaskFileMeta(file,key){return {name:file.name,type:file.type||'application/octet-stream',size:file.size||0,storageKey:key};}
+async function ctOpenTaskStoredFile(taskId,kind){const t=(db.adminTasks||[]).find(x=>x.id===taskId);if(!t)return;const f=kind==='completion'?t.completionFile:t.instructionFile;if(!f)return;if(f.dataURL){ctOpenDataFile(f);return;}if(!f.storageKey){showToast('Attachment could not be found.');return;}try{const blob=await ctGetTaskBlob(f.storageKey);if(!blob){showToast('Attachment is not stored on this device. Import the newest CRM backup first.');return;}const u=URL.createObjectURL(blob),w=window.open(u,'_blank');if(!w){const a=document.createElement('a');a.href=u;a.download=f.name||'attachment';document.body.appendChild(a);a.click();a.remove();}setTimeout(()=>URL.revokeObjectURL(u),60000);}catch(e){console.error(e);alert('Could not open this attachment. '+(e?.message||''));}}
+async function ctStoreTaskFile(file,key,maxMb=8){if(!file)return null;if(file.size>maxMb*1024*1024)throw new Error('File is too large. Please keep it under '+maxMb+' MB.');await ctPutTaskBlob(key,file);return ctTaskFileMeta(file,key);}
+
+async function ctMigrateLegacyTaskAttachments(){let changed=false;try{for(const t of (db.adminTasks||[])){for(const [prop,prefix] of [['instructionFile','instruction_'],['completionFile','completion_']]){const f=t[prop];if(f?.dataURL){const key=prefix+t.id;await ctPutTaskBlob(key,ctDataURLToBlob(f.dataURL));t[prop]={name:f.name,type:f.type,size:f.size||0,storageKey:key};changed=true;}}}if(changed)saveDB();}catch(e){console.warn('Legacy task attachment migration skipped',e);}}
+setTimeout(()=>ctMigrateLegacyTaskAttachments(),300);
 function ctTaskFileToData(file,maxMb=8){return new Promise((resolve,reject)=>{if(!file){resolve(null);return;}if(file.size>maxMb*1024*1024){reject(new Error('File is too large. Please keep it under '+maxMb+' MB.'));return;}const r=new FileReader();r.onload=()=>resolve({name:file.name,type:file.type||'application/octet-stream',size:file.size,dataURL:r.result});r.onerror=()=>reject(r.error);r.readAsDataURL(file);});}
 function ctDownloadDataFile(f){if(!f?.dataURL)return;const a=document.createElement('a');a.href=f.dataURL;a.download=f.name||'attachment';document.body.appendChild(a);a.click();a.remove();}
 function ctOpenDataFile(f){if(!f?.dataURL)return;const w=window.open();if(w)w.location=f.dataURL;else ctDownloadDataFile(f);}
+function ctIsOwner(){return !!ctCurrentUser&&((ctCurrentUser.role||'').toLowerCase()==='owner'||(ctCurrentUser.email||'').toLowerCase()==='francesca@checktutors.com');}
+function ctTaskPersist(){
+  try{saveDB();return true;}catch(e){
+    console.error('Task persistence failed',e);
+    // Strip any legacy inline task file payloads that can unnecessarily consume localStorage.
+    try{for(const t of (db.adminTasks||[])){for(const k of ['instructionFile','completionFile']){if(t[k]&&t[k].dataURL)delete t[k].dataURL;}}saveDB();return true;}catch(e2){console.error('Task persistence retry failed',e2);alert('The task change could not be saved because this browser storage is full. Export a CRM backup, then remove older local uploads or use the hosted CRM.');return false;}
+  }
+}
 function ctOpenAssignTask(id=''){
-  if(ctCurrentUser?.role!=='Owner')return;ctEnsureTaskData();const t=id?(db.adminTasks||[]).find(x=>x.id===id):null;
+  if(!ctIsOwner())return;ctEnsureTaskData();const t=id?(db.adminTasks||[]).find(x=>x.id===id):null;
   document.getElementById('ct-task-id').value=t?.id||'';document.getElementById('ct-task-edit-title').textContent=t?'✏️ Edit Assigned Task':'📌 Assign Task';
   document.getElementById('ct-task-title').value=t?.title||'';document.getElementById('ct-task-due').value=t?.dueDate||'';document.getElementById('ct-task-details').value=t?.details||'';document.getElementById('ct-task-instruction-file').value='';
   const sel=document.getElementById('ct-task-assignee'),admins=ctTaskAdminEmployees();sel.innerHTML=admins.map(e=>`<option value="${ctTaskEsc(e.email)}">${ctTaskEsc(e.name)} — ${ctTaskEsc(e.email)}</option>`).join('');if(t?.assignedTo)sel.value=t.assignedTo;
-  document.getElementById('ct-task-instruction-current').innerHTML=t?.instructionFile?`Current: <b>${ctTaskEsc(t.instructionFile.name)}</b> <button type="button" class="btn btn-secondary btn-sm" onclick="ctOpenDataFile((db.adminTasks||[]).find(x=>x.id==='${t.id}')?.instructionFile)">Open</button>`:'No PDF attached.';
+  document.getElementById('ct-task-instruction-current').innerHTML=t?.instructionFile?`Current: <b>${ctTaskEsc(t.instructionFile.name)}</b> <button type="button" class="btn btn-secondary btn-sm" onclick="ctOpenTaskStoredFile('${t.id}','instruction')">Open</button>`:'No PDF attached.';
   document.getElementById('ct-task-delete-btn').style.display=t?'inline-block':'none';openModal('m-admin-task-edit');
 }
 window.ctSaveAssignedTask=async function(ev){
   if(ev){ev.preventDefault();ev.stopPropagation();}
-  if(ctCurrentUser?.role!=='Owner'){showToast('Only the Owner can save assigned tasks.');return;}
+  if(!ctIsOwner()){showToast('Only the Owner can save assigned tasks.');return;}
   ctEnsureTaskData();
   const saveBtn=document.getElementById('ct-task-save-btn');
   if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Saving…';}
@@ -4997,7 +5017,8 @@ window.ctSaveAssignedTask=async function(ev){
     const file=input?.files?.[0];
     if(file){
       if(!(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf'))){showToast('Instructions attachment must be a PDF.');return;}
-      task.instructionFile=await ctTaskFileToData(file,8);
+      const key='instruction_'+task.id;
+      task.instructionFile=await ctStoreTaskFile(file,key,12);
     }
 
     if(existing){
@@ -5006,7 +5027,7 @@ window.ctSaveAssignedTask=async function(ev){
     }else{
       db.adminTasks.unshift(task);
     }
-    saveDB();
+    if(!ctTaskPersist())return;
     closeModal('m-admin-task-edit');
     ctRenderTaskDashboard();
     if(typeof ctRenderEmployeeTaskPanel==='function')ctRenderEmployeeTaskPanel();
@@ -5018,24 +5039,45 @@ window.ctSaveAssignedTask=async function(ev){
     if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Task';}
   }
 };
-window.ctDeleteTaskFromEdit=function(ev){if(ev){ev.preventDefault();ev.stopPropagation();}const id=(document.getElementById('ct-task-id')?.value||'').trim();if(!id){showToast('Could not find this task.');return;}if(ctCurrentUser?.role!=='Owner'){showToast('Only the Owner can delete assigned tasks.');return;}const task=(db.adminTasks||[]).find(x=>x.id===id);if(!task){showToast('Task was already removed.');closeModal('m-admin-task-edit');ctRenderTaskDashboard();return;}if(!confirm('Delete task “'+(task.title||'Untitled task')+'”?'))return;db.adminTasks=(db.adminTasks||[]).filter(x=>x.id!==id);saveDB();closeModal('m-admin-task-edit');closeModal('m-admin-task-view');ctRenderTaskDashboard();if(typeof ctRenderEmployeeTaskPanel==='function')ctRenderEmployeeTaskPanel();showToast('Task deleted.');};
+window.ctDeleteTaskFromEdit=async function(ev){if(ev){ev.preventDefault();ev.stopPropagation();}const id=(document.getElementById('ct-task-id')?.value||'').trim();if(!id){showToast('Could not find this task.');return;}if(!ctIsOwner()){showToast('Only the Owner can delete assigned tasks.');return;}const task=(db.adminTasks||[]).find(x=>x.id===id);if(!task){showToast('Task was already removed.');closeModal('m-admin-task-edit');ctRenderTaskDashboard();return;}if(!confirm('Delete task “'+(task.title||'Untitled task')+'”?'))return;await ctDeleteTaskBlob(task.instructionFile?.storageKey);await ctDeleteTaskBlob(task.completionFile?.storageKey);db.adminTasks=(db.adminTasks||[]).filter(x=>x.id!==id);if(!ctTaskPersist())return;closeModal('m-admin-task-edit');closeModal('m-admin-task-view');ctRenderTaskDashboard();if(typeof ctRenderEmployeeTaskPanel==='function')ctRenderEmployeeTaskPanel();showToast('Task deleted.');};
 function ctTaskForCurrentAdmin(t){return ctCurrentUser?.role==='Admin'&&(t.assignedTo||'').toLowerCase()===(ctCurrentUser.email||'').toLowerCase();}
-function ctOpenTask(id){ctEnsureTaskData();const t=(db.adminTasks||[]).find(x=>x.id===id);if(!t)return;if(ctCurrentUser?.role!=='Owner'&&!ctTaskForCurrentAdmin(t))return;document.getElementById('ct-task-view-id').value=t.id;document.getElementById('ct-task-view-title').textContent='📌 '+t.title;document.getElementById('ct-task-view-meta').innerHTML=`Assigned by <b>${ctTaskEsc(t.assignedBy||'Owner')}</b> · Due ${ctTaskEsc(ctTaskDateLabel(t.dueDate))} · ${ctTaskStatusBadge(t)}`;
+function ctOpenTask(id){ctEnsureTaskData();const t=(db.adminTasks||[]).find(x=>x.id===id);if(!t)return;if(!ctIsOwner()&&!ctTaskForCurrentAdmin(t))return;document.getElementById('ct-task-view-id').value=t.id;document.getElementById('ct-task-view-title').textContent='📌 '+t.title;document.getElementById('ct-task-view-meta').innerHTML=`Assigned by <b>${ctTaskEsc(t.assignedBy||'Owner')}</b> · Due ${ctTaskEsc(ctTaskDateLabel(t.dueDate))} · ${ctTaskStatusBadge(t)}`;
   let body=`<div style="background:var(--navy-light);border-radius:12px;padding:14px"><div style="font-size:11px;font-weight:800;color:var(--soft);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Task Details</div><div style="font-size:13px;line-height:1.55;white-space:pre-wrap">${ctTaskEsc(t.details||'No additional details.')}</div></div>`;
-  if(t.instructionFile)body+=`<div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);padding:10px 12px;border-radius:10px"><div><b>📎 ${ctTaskEsc(t.instructionFile.name)}</b><div style="font-size:11px;color:var(--soft)">Task instructions</div></div><button class="btn btn-secondary btn-sm" onclick="ctOpenDataFile((db.adminTasks||[]).find(x=>x.id==='${t.id}')?.instructionFile)">Open PDF</button></div>`;
-  if(t.status==='completed'){body+=`<div style="margin-top:12px;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:12px;padding:13px"><div style="font-weight:800;color:var(--green);margin-bottom:6px">✓ Completed${t.completedAt?' · '+new Date(t.completedAt).toLocaleString():''}</div>${t.completionNotes?`<div style="font-size:13px;white-space:pre-wrap;margin-bottom:8px">${ctTaskEsc(t.completionNotes)}</div>`:''}${t.completionLink?`<a class="btn btn-secondary btn-sm" href="${ctTaskEsc(t.completionLink)}" target="_blank" rel="noopener">Open Completed Work ↗</a>`:''}${t.completionFile?` <button class="btn btn-secondary btn-sm" onclick="ctOpenDataFile((db.adminTasks||[]).find(x=>x.id==='${t.id}')?.completionFile)">Open ${ctTaskEsc(t.completionFile.name)}</button>`:''}</div>`;}
+  if(t.instructionFile)body+=`<div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);padding:10px 12px;border-radius:10px"><div><b>📎 ${ctTaskEsc(t.instructionFile.name)}</b><div style="font-size:11px;color:var(--soft)">Task instructions</div></div><button class="btn btn-secondary btn-sm" onclick="ctOpenTaskStoredFile('${t.id}','instruction')">Open PDF</button></div>`;
+  if(t.status==='completed'){body+=`<div style="margin-top:12px;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:12px;padding:13px"><div style="font-weight:800;color:var(--green);margin-bottom:6px">✓ Completed${t.completedAt?' · '+new Date(t.completedAt).toLocaleString():''}</div>${t.completionNotes?`<div style="font-size:13px;white-space:pre-wrap;margin-bottom:8px">${ctTaskEsc(t.completionNotes)}</div>`:''}${t.completionLink?`<a class="btn btn-secondary btn-sm" href="${ctTaskEsc(t.completionLink)}" target="_blank" rel="noopener">Open Completed Work ↗</a>`:''}${t.completionFile?` <button class="btn btn-secondary btn-sm" onclick="ctOpenTaskStoredFile('${t.id}','completion')">Open ${ctTaskEsc(t.completionFile.name)}</button>`:''}</div>`;}
   document.getElementById('ct-task-view-body').innerHTML=body;const completion=document.getElementById('ct-task-completion-area');completion.style.display=ctTaskForCurrentAdmin(t)&&t.status!=='completed'?'block':'none';document.getElementById('ct-task-completion-link').value=t.completionLink||'';document.getElementById('ct-task-completion-notes').value=t.completionNotes||'';document.getElementById('ct-task-completion-file').value='';document.getElementById('ct-task-completion-current').textContent=t.completionFile?'Current: '+t.completionFile.name:'';
-  const editBtn=document.getElementById('ct-task-owner-edit-btn'),reopen=document.getElementById('ct-task-reopen-btn');if(editBtn)editBtn.style.display=ctCurrentUser?.role==='Owner'?'inline-block':'none';if(reopen)reopen.style.display=ctCurrentUser?.role==='Owner'&&t.status==='completed'?'inline-block':'none';openModal('m-admin-task-view');
+  const editBtn=document.getElementById('ct-task-owner-edit-btn'),reopen=document.getElementById('ct-task-reopen-btn');if(editBtn)editBtn.style.display=ctIsOwner()?'inline-block':'none';if(reopen)reopen.style.display=ctIsOwner()&&t.status==='completed'?'inline-block':'none';openModal('m-admin-task-view');
 }
-async function ctCompleteTask(){const id=document.getElementById('ct-task-view-id').value,t=(db.adminTasks||[]).find(x=>x.id===id);if(!t||!ctTaskForCurrentAdmin(t))return;const link=document.getElementById('ct-task-completion-link').value.trim(),notes=document.getElementById('ct-task-completion-notes').value.trim(),file=document.getElementById('ct-task-completion-file').files?.[0];if(link&&!/^https?:\/\//i.test(link)){showToast('Completed work link should start with http:// or https://');return;}if(file){try{t.completionFile=await ctTaskFileToData(file,8);}catch(e){alert(e.message);return;}}t.completionLink=link;t.completionNotes=notes;t.status='completed';t.completedAt=new Date().toISOString();t.completedBy=ctAccountDisplayName();saveDB();closeModal('m-admin-task-view');ctRenderTaskDashboard();showToast('Task marked complete!');}
-function ctEditTaskFromView(){if(ctCurrentUser?.role!=='Owner')return;const id=document.getElementById('ct-task-view-id').value;closeModal('m-admin-task-view');ctOpenAssignTask(id);}
-function ctReopenTask(){if(ctCurrentUser?.role!=='Owner')return;const id=document.getElementById('ct-task-view-id').value,t=(db.adminTasks||[]).find(x=>x.id===id);if(!t)return;t.status='assigned';t.completedAt='';t.completedBy='';saveDB();closeModal('m-admin-task-view');ctRenderTaskDashboard();showToast('Task reopened.');}
-function ctRenderTaskRows(tasks,ownerView=false){if(!tasks.length)return '<div class="empty" style="padding:18px"><div class="empty-icon">📌</div><p>No assigned tasks right now.</p></div>';return tasks.map(t=>{const overdue=t.status!=='completed'&&t.dueDate&&t.dueDate<today();const due=t.dueDate?fmt(t.dueDate):'No due date';return `<div onclick="ctOpenTask('${t.id}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid #f0f1f5"><div style="width:34px;height:34px;border-radius:10px;background:${t.status==='completed'?'#e8f5e9':'var(--navy-light)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">${t.status==='completed'?'✓':'📌'}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:800;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ctTaskEsc(t.title)}</div><div style="font-size:11px;color:${overdue?'var(--red)':'var(--soft)'};margin-top:2px">${ownerView?`Assigned to ${ctTaskEsc(t.assignedToName||t.assignedTo)} · `:''}Assigned by ${ctTaskEsc(t.assignedBy||'Owner')} · Due ${ctTaskEsc(due)}${overdue?' ⚠️ Overdue':''}</div></div>${ctTaskStatusBadge(t)}</div>`;}).join('');}
+async function ctCompleteTask(){const id=document.getElementById('ct-task-view-id').value,t=(db.adminTasks||[]).find(x=>x.id===id);if(!t||!ctTaskForCurrentAdmin(t))return;const link=document.getElementById('ct-task-completion-link').value.trim(),notes=document.getElementById('ct-task-completion-notes').value.trim(),file=document.getElementById('ct-task-completion-file').files?.[0];if(link&&!/^https?:\/\//i.test(link)){showToast('Completed work link should start with http:// or https://');return;}if(file){try{t.completionFile=await ctStoreTaskFile(file,'completion_'+t.id,12);}catch(e){alert(e.message);return;}}t.completionLink=link;t.completionNotes=notes;t.status='completed';t.completedAt=new Date().toISOString();t.completedBy=ctAccountDisplayName();if(!ctTaskPersist())return;closeModal('m-admin-task-view');ctRenderTaskDashboard();showToast('Task marked complete!');}
+function ctEditTaskFromView(){if(!ctIsOwner())return;const id=document.getElementById('ct-task-view-id').value;closeModal('m-admin-task-view');ctOpenAssignTask(id);}
+function ctReopenTask(){if(!ctIsOwner())return;const id=document.getElementById('ct-task-view-id').value,t=(db.adminTasks||[]).find(x=>x.id===id);if(!t)return;t.status='assigned';t.completedAt='';t.completedBy='';if(!ctTaskPersist())return;closeModal('m-admin-task-view');ctRenderTaskDashboard();showToast('Task reopened.');}
+window.ctDeleteTaskById=async function(id,ev){
+  if(ev){ev.preventDefault();ev.stopPropagation();}
+  if(!ctIsOwner()){showToast('Only the Owner can delete assigned tasks.');return;}
+  const task=(db.adminTasks||[]).find(x=>x.id===id);
+  if(!task){showToast('Task was already removed.');ctRenderTaskDashboard();return;}
+  if(!confirm('Delete task “'+(task.title||'Untitled task')+'”?'))return;
+  await ctDeleteTaskBlob(task.instructionFile?.storageKey);
+  await ctDeleteTaskBlob(task.completionFile?.storageKey);
+  db.adminTasks=(db.adminTasks||[]).filter(x=>x.id!==id);
+  if(!ctTaskPersist())return;
+  closeModal('m-admin-task-edit');closeModal('m-admin-task-view');
+  ctRenderTaskDashboard();if(typeof ctRenderEmployeeTaskPanel==='function')ctRenderEmployeeTaskPanel();showToast('Task deleted.');
+};
+window.ctEditTaskById=function(id,ev){if(ev){ev.preventDefault();ev.stopPropagation();}if(!ctIsOwner())return;ctOpenAssignTask(id);};
+function ctRenderTaskRows(tasks,ownerView=false){
+  if(!tasks.length)return '<div class="empty" style="padding:18px"><div class="empty-icon">📌</div><p>No assigned tasks right now.</p></div>';
+  return tasks.map(t=>{
+    const overdue=t.status!=='completed'&&t.dueDate&&t.dueDate<today(),due=t.dueDate?fmt(t.dueDate):'No due date';
+    const ownerActions=ownerView&&ctIsOwner()?`<div style="display:flex;gap:5px;flex-shrink:0"><button type="button" class="btn btn-secondary btn-sm" onclick="ctEditTaskById('${t.id}',event)">✏️ Edit</button><button type="button" class="btn btn-danger btn-sm" onclick="ctDeleteTaskById('${t.id}',event)">🗑️ Delete</button></div>`:'';
+    return `<div onclick="ctOpenTask('${t.id}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid #f0f1f5"><div style="width:34px;height:34px;border-radius:10px;background:${t.status==='completed'?'#e8f5e9':'var(--navy-light)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">${t.status==='completed'?'✓':'📌'}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:800;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ctTaskEsc(t.title)}</div><div style="font-size:11px;color:${overdue?'var(--red)':'var(--soft)'};margin-top:2px">${ownerView?`Assigned to ${ctTaskEsc(t.assignedToName||t.assignedTo)} · `:''}Assigned by ${ctTaskEsc(t.assignedBy||'Owner')} · Due ${ctTaskEsc(due)}${overdue?' ⚠️ Overdue':''}</div></div>${ctTaskStatusBadge(t)}${ownerActions}</div>`;
+  }).join('');
+}
 function ctRenderEmployeeTaskPanel(){
   const panel=document.getElementById('ct-employee-task-panel'),list=document.getElementById('ct-employee-task-list'),btn=document.getElementById('ct-employee-assign-task-btn');
   if(!panel||!list)return;
   const empId=document.getElementById('emp-id')?.value||'',e=(db.employees||[]).find(x=>x.id===empId);
-  const canSee=ctCurrentUser?.role==='Owner'&&e&&e.type==='admin'&&e.email;
+  const canSee=ctIsOwner()&&e&&e.type==='admin'&&e.email;
   panel.style.display=canSee?'block':'none';
   if(!canSee){list.innerHTML='';return;}
   const email=(e.email||'').toLowerCase();
@@ -5045,7 +5087,7 @@ function ctRenderEmployeeTaskPanel(){
 }
 window.ctOpenAssignTaskForEmployee=function(email){ctOpenAssignTask('');const sel=document.getElementById('ct-task-assignee');if(sel){sel.value=email;sel.dispatchEvent(new Event('change'));}};
 window.ctEditEmployeeTask=function(id){closeModal('m-employee');ctOpenAssignTask(id);};
-function ctRenderTaskDashboard(){ctEnsureTaskData();const ownerCard=document.getElementById('ct-owner-tasks-card'),ownerList=document.getElementById('ct-owner-task-list');if(ownerCard)ownerCard.style.display=ctCurrentUser?.role==='Owner'?'block':'none';if(ownerList&&ctCurrentUser?.role==='Owner'){const tasks=[...(db.adminTasks||[])].sort((a,b)=>((a.status==='completed')-(b.status==='completed'))||((a.dueDate||'9999').localeCompare(b.dueDate||'9999')));ownerList.innerHTML=ctRenderTaskRows(tasks,true);}
+function ctRenderTaskDashboard(){ctEnsureTaskData();const ownerCard=document.getElementById('ct-owner-tasks-card'),ownerList=document.getElementById('ct-owner-task-list');if(ownerCard)ownerCard.style.display=ctIsOwner()?'block':'none';if(ownerList&&ctIsOwner()){const tasks=[...(db.adminTasks||[])].sort((a,b)=>((a.status==='completed')-(b.status==='completed'))||((a.dueDate||'9999').localeCompare(b.dueDate||'9999')));ownerList.innerHTML=ctRenderTaskRows(tasks,true);}
   const exp=document.getElementById('d-expiring')?.closest('.card'),recent=document.getElementById('d-recent')?.closest('.card'),right=exp?.parentElement;let adminCard=document.getElementById('ct-admin-tasks-card');if(ctCurrentUser?.role==='Admin'){if(exp)exp.style.display='none';if(recent)recent.style.display='none';if(!adminCard&&right){adminCard=document.createElement('div');adminCard.className='card';adminCard.id='ct-admin-tasks-card';right.prepend(adminCard);}if(adminCard){adminCard.style.display='block';const mine=(db.adminTasks||[]).filter(ctTaskForCurrentAdmin).sort((a,b)=>((a.status==='completed')-(b.status==='completed'))||((a.dueDate||'9999').localeCompare(b.dueDate||'9999')));adminCard.innerHTML=`<div class="card-title" style="font-size:14px;color:var(--navy)">📌 TASKS ASSIGNED TO ME</div><div style="font-size:11px;color:var(--soft);margin:-4px 0 8px">Click a task to view instructions or submit completed work.</div>${ctRenderTaskRows(mine,false)}`;}}else{if(exp)exp.style.display='';if(recent)recent.style.display='';if(adminCard)adminCard.style.display='none';}}
 
 function ctBlobToDataURL(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.readAsDataURL(blob);});}
@@ -5056,7 +5098,18 @@ async function ctExportSharedData(){
   try{
     for(const f of (db.freebies||[])){const blob=await getFreebieBlob(f.id);if(blob)freebieFiles[f.id]=await ctBlobToDataURL(blob);}
   }catch(e){console.warn("Some freebie PDFs could not be included",e);}
+  const taskFiles={};
+  try{
+    for(const t of (db.adminTasks||[])){
+      for(const kind of ['instructionFile','completionFile']){
+        const f=t[kind];if(!f)continue;const exportKey=t.id+'::'+kind;
+        if(f.dataURL){taskFiles[exportKey]=f.dataURL;continue;}
+        if(f.storageKey){const blob=await ctGetTaskBlob(f.storageKey);if(blob)taskFiles[exportKey]=await ctBlobToDataURL(blob);}
+      }
+    }
+  }catch(e){console.warn("Some task attachments could not be included",e);}
   const sharedDb=JSON.parse(JSON.stringify(db));delete sharedDb.todos;delete sharedDb.todoCounter;
+  for(const t of (sharedDb.adminTasks||[])){if(t.instructionFile)delete t.instructionFile.dataURL;if(t.completionFile)delete t.completionFile.dataURL;}
   const adminTimesheets={},adminWages={},adminTimesheetReviews={};
   for(const e of (db.employees||[]).filter(x=>x.type==="admin"&&x.email)){
     const k=String(e.email).toLowerCase().replace(/[^a-z0-9]/g,'_');
@@ -5064,7 +5117,7 @@ async function ctExportSharedData(){
     adminWages[e.email]=parseFloat(localStorage.getItem('ct_admin_wage_'+k)||'0')||0;
     try{adminTimesheetReviews[e.email]=JSON.parse(localStorage.getItem('ct_admin_timesheet_reviews_'+k)||'{}')||{};}catch(_){adminTimesheetReviews[e.email]={};}
   }
-  const payload={app:"Check Tutors CRM",format:"ct-crm-backup",version:6,exportedAt:new Date().toISOString(),exportedBy:{name:ctCurrentUser?.name||"Admin",role:ctCurrentUser?.role||"Admin"},db:sharedDb,freebieFiles,adminTimesheets,adminWages,adminTimesheetReviews};
+  const payload={app:"Check Tutors CRM",format:"ct-crm-backup",version:7,exportedAt:new Date().toISOString(),exportedBy:{name:ctCurrentUser?.name||"Admin",role:ctCurrentUser?.role||"Admin"},db:sharedDb,freebieFiles,taskFiles,adminTimesheets,adminWages,adminTimesheetReviews};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}),u=URL.createObjectURL(blob),a=document.createElement("a");
   a.href=u;a.download="CheckTutors_CRM_Data_"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);
   localStorage.setItem("ct_shared_export_at",payload.exportedAt);localStorage.setItem("ct_shared_export_by",payload.exportedBy.name);ctRenderDataMeta();showToast("Private CRM data downloaded!");
@@ -5073,10 +5126,13 @@ function ctImportSharedData(input){
   const file=input.files&&input.files[0];if(!file)return;const r=new FileReader();
   r.onload=async()=>{try{const x=JSON.parse(r.result);const incoming=x.db||x;delete incoming.todos;delete incoming.todoCounter;if(!incoming||!Array.isArray(incoming.students)||!Array.isArray(incoming.sessions)){throw new Error("Invalid CRM backup");}
     const when=x.exportedAt?new Date(x.exportedAt).toLocaleString():"Unknown date",who=x.exportedBy?.name||"Unknown";
-    const msg=`Import CRM data?\n\nBackup: ${when}\nCreated by: ${who}\nStudents: ${(incoming.students||[]).length}\nSessions: ${(incoming.sessions||[]).length}\nLeads: ${(incoming.leads||[]).length}\nFreebie PDFs: ${Object.keys(x.freebieFiles||{}).length}\n\nThis will replace the CRM data stored in THIS browser.`;
+    const msg=`Import CRM data?\n\nBackup: ${when}\nCreated by: ${who}\nStudents: ${(incoming.students||[]).length}\nSessions: ${(incoming.sessions||[]).length}\nLeads: ${(incoming.leads||[]).length}\nFreebie PDFs: ${Object.keys(x.freebieFiles||{}).length}\nTask attachments: ${Object.keys(x.taskFiles||{}).length}\n\nThis will replace the CRM data stored in THIS browser.`;
     if(!confirm(msg)){input.value="";return;}
-    localStorage.setItem(DBKEY,JSON.stringify(incoming));
     for(const [id,dataURL] of Object.entries(x.freebieFiles||{})){try{await putFreebieBlob(id,ctDataURLToBlob(dataURL));}catch(e){console.warn("Could not restore freebie",id,e);}}
+    for(const [compound,dataURL] of Object.entries(x.taskFiles||{})){
+      try{const [taskId,kind]=compound.split('::'),t=(incoming.adminTasks||[]).find(z=>z.id===taskId);if(!t)continue;const prop=kind==='completionFile'?'completionFile':'instructionFile',f=t[prop];if(!f)continue;const key=(prop==='completionFile'?'completion_':'instruction_')+taskId;await ctPutTaskBlob(key,ctDataURLToBlob(dataURL));f.storageKey=key;delete f.dataURL;}catch(e){console.warn("Could not restore task attachment",compound,e);}
+    }
+    localStorage.setItem(DBKEY,JSON.stringify(incoming));
     for(const [email,rows] of Object.entries(x.adminTimesheets||{})){const k=String(email).toLowerCase().replace(/[^a-z0-9]/g,'_');localStorage.setItem('ct_admin_timesheet_'+k,JSON.stringify(Array.isArray(rows)?rows:[]));}
     for(const [email,wage] of Object.entries(x.adminWages||{})){const k=String(email).toLowerCase().replace(/[^a-z0-9]/g,'_');localStorage.setItem('ct_admin_wage_'+k,String(Math.max(0,parseFloat(wage)||0)));}
     for(const [email,reviews] of Object.entries(x.adminTimesheetReviews||{})){const k=String(email).toLowerCase().replace(/[^a-z0-9]/g,'_');localStorage.setItem('ct_admin_timesheet_reviews_'+k,JSON.stringify(reviews&&typeof reviews==='object'?reviews:{}));}
