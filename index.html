@@ -120,7 +120,7 @@ tr:hover td{background:#fafafa}
 .prof-val{font-size:13px;color:var(--text);flex:1;line-height:1.5}
 .prof-sec{font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.6px;padding:12px 0 7px;border-bottom:2px solid var(--navy-light);margin-bottom:5px;margin-top:8px}
 .prof-sec:first-child{margin-top:0;padding-top:0}
-.dash-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.dash-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}.dash-cols>div{min-width:0}
 .empty{text-align:center;padding:32px 20px;color:var(--soft)}
 .empty-icon{font-size:36px;margin-bottom:9px}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--navy);color:#fff;padding:10px 20px;border-radius:99px;font-size:14px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.2);transition:.3s;z-index:1000;white-space:nowrap}
@@ -176,6 +176,12 @@ tr:hover td{background:#fafafa}
 .owner-only-hidden{display:none!important}
 @media(max-width:900px){.ct-user-chip .ct-user-text{display:none}}
 
+
+#ct-admin-tasks-card{min-width:0!important;width:100%!important;box-sizing:border-box}
+#ct-admin-tasks-card *{min-width:0}
+#ct-admin-tasks-card b,
+#ct-admin-tasks-card .task-title,
+#ct-admin-tasks-card div{overflow-wrap:anywhere;word-break:normal}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -5059,7 +5065,7 @@ function ctRenderEmployeeTaskPanel(){
 window.ctOpenAssignTaskForEmployee=function(email){ctOpenAssignTask('');const sel=document.getElementById('ct-task-assignee');if(sel){sel.value=email;sel.dispatchEvent(new Event('change'));}};
 window.ctEditEmployeeTask=function(id){closeModal('m-employee');ctOpenAssignTask(id);};
 function ctRenderTaskDashboard(){ctEnsureTaskData();const ownerCard=document.getElementById('ct-owner-tasks-card'),ownerList=document.getElementById('ct-owner-task-list');if(ownerCard)ownerCard.style.display=ctCurrentUser?.role==='Owner'?'block':'none';if(ownerList&&ctCurrentUser?.role==='Owner'){const tasks=[...(db.adminTasks||[])].sort((a,b)=>((a.status==='completed')-(b.status==='completed'))||((a.dueDate||'9999').localeCompare(b.dueDate||'9999')));ownerList.innerHTML=ctRenderTaskRows(tasks,true);}
-  const exp=document.getElementById('d-expiring')?.closest('.card'),recent=document.getElementById('d-recent')?.closest('.card'),right=exp?.parentElement;let adminCard=document.getElementById('ct-admin-tasks-card');if(ctCurrentUser?.role==='Admin'){if(exp)exp.style.display='none';if(recent)recent.style.display='none';if(!adminCard&&right){adminCard=document.createElement('div');adminCard.className='card';adminCard.id='ct-admin-tasks-card';right.prepend(adminCard);}if(adminCard){adminCard.style.display='block';adminCard.style.height='100%';adminCard.style.minHeight='0';adminCard.style.maxHeight='430px';adminCard.style.overflow='hidden';const mine=(db.adminTasks||[]).filter(ctTaskForCurrentAdmin).sort((a,b)=>((a.status==='completed')-(b.status==='completed'))||((a.dueDate||'9999').localeCompare(b.dueDate||'9999')));adminCard.innerHTML=`<div class="card-title" style="font-size:14px;color:var(--navy)">📌 TASKS ASSIGNED TO ME</div><div style="font-size:11px;color:var(--soft);margin:-4px 0 8px">Click a task to view instructions or submit completed work.</div><div style="max-height:350px;overflow-y:auto;padding-right:3px">${ctRenderTaskRows(mine,false)}</div>`;}}else{if(exp)exp.style.display='';if(recent)recent.style.display='';if(adminCard)adminCard.style.display='none';}}
+  const exp=document.getElementById('d-expiring')?.closest('.card'),recent=document.getElementById('d-recent')?.closest('.card'),right=exp?.parentElement;let adminCard=document.getElementById('ct-admin-tasks-card');if(ctCurrentUser?.role==='Admin'){if(exp)exp.style.display='none';if(recent)recent.style.display='none';if(!adminCard&&right){adminCard=document.createElement('div');adminCard.className='card';adminCard.id='ct-admin-tasks-card';right.prepend(adminCard);}if(adminCard){adminCard.style.display='block';adminCard.style.height='auto';adminCard.style.minHeight='0';adminCard.style.maxHeight='430px';adminCard.style.overflow='hidden';const mine=(db.adminTasks||[]).filter(ctTaskForCurrentAdmin).sort((a,b)=>((a.status==='completed')-(b.status==='completed'))||((a.dueDate||'9999').localeCompare(b.dueDate||'9999')));adminCard.innerHTML=`<div class="card-title" style="font-size:14px;color:var(--navy)">📌 TASKS ASSIGNED TO ME</div><div style="font-size:11px;color:var(--soft);margin:-4px 0 8px">Click a task to view instructions or submit completed work.</div><div style="max-height:350px;overflow-y:auto;padding-right:3px">${ctRenderTaskRows(mine,false)}</div>`;}}else{if(exp)exp.style.display='';if(recent)recent.style.display='';if(adminCard)adminCard.style.display='none';}}
 
 function ctBlobToDataURL(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.readAsDataURL(blob);});}
 function ctDataURLToBlob(dataURL){const parts=dataURL.split(","),mime=(parts[0].match(/:(.*?);/)||[])[1]||"application/pdf",bin=atob(parts[1]||""),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:mime});}
