@@ -154,6 +154,19 @@ tr:hover td{background:#fafafa}
 .ct-user-avatar{width:31px;height:31px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.15);font-size:15px}
 .ct-logout{border:0;background:rgba(255,255,255,.1);color:#fff;border-radius:8px;padding:7px 9px;cursor:pointer;font-weight:700}
 .ct-logout:hover{background:rgba(255,255,255,.22)}
+.ct-profile-menu{position:relative;margin-left:6px;align-self:stretch;display:flex;align-items:center}
+.ct-profile-trigger{border:0;background:transparent;cursor:pointer;padding:5px 7px;border-radius:10px;margin-left:0;font:inherit}
+.ct-profile-trigger:hover,.ct-profile-menu:focus-within .ct-profile-trigger{background:rgba(255,255,255,.10)}
+.ct-profile-caret{font-size:10px;opacity:.7;margin-left:1px;transition:transform .15s ease}
+.ct-profile-menu.open .ct-profile-caret{transform:rotate(180deg)}
+.ct-profile-dropdown{display:none;position:absolute;right:0;top:calc(100% - 3px);min-width:190px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 14px 34px rgba(26,30,80,.18);padding:7px;z-index:10050}
+.ct-profile-menu:hover .ct-profile-dropdown,.ct-profile-menu:focus-within .ct-profile-dropdown,.ct-profile-menu.open .ct-profile-dropdown{display:block}
+.ct-profile-item{width:100%;border:0;background:transparent;border-radius:8px;padding:10px 11px;display:flex;align-items:center;gap:9px;text-align:left;cursor:pointer;color:var(--text);font-size:12px;font-weight:700}
+.ct-profile-item:hover,.ct-profile-item.active{background:var(--navy-light);color:var(--navy)}
+.ct-profile-divider{height:1px;background:var(--border);margin:5px 3px}
+.ct-profile-logout{color:var(--red)}
+.ct-profile-logout:hover{background:#fff1f2;color:var(--red)}
+@media(max-width:900px){.ct-profile-dropdown{right:0;min-width:180px}.ct-profile-caret{display:none}}
 .ct-welcome{background:linear-gradient(135deg,var(--navy),#4a4f96);color:#fff;border-radius:18px;padding:18px 22px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;box-shadow:0 5px 18px rgba(45,50,112,.16)}
 .ct-welcome h3{font-size:20px;margin:0 0 3px}
 .ct-welcome p{font-size:12px;opacity:.78;margin:0}
@@ -182,10 +195,12 @@ tr:hover td{background:#fafafa}
     </div>
     <div style="font-size:21px;font-weight:800;color:var(--text);margin-bottom:5px">Welcome back 👋</div>
     <div style="font-size:13px;color:var(--soft);margin-bottom:20px">Sign in to open the Check Tutors admin portal</div>
-    <div class="field" style="margin-bottom:11px"><label>Email</label><input id="ct-login-email" type="email" placeholder="you@checktutors.com" autocomplete="username"></div>
-    <div class="field"><label>Password</label><input id="ct-login-password" type="password" placeholder="••••••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')ctLogin()"></div>
-    <div id="ct-login-error" style="display:none;color:var(--red);font-size:12px;font-weight:650;margin-top:10px"></div>
-    <button class="btn btn-primary" style="width:100%;margin-top:16px;padding:12px" onclick="ctLogin()">Sign In →</button>
+    <form id="ct-login-form" autocomplete="on" action="javascript:void(0)" onsubmit="return ctHandleLoginSubmit(event);">
+      <div class="field" style="margin-bottom:11px"><label for="ct-login-email">Email</label><input id="ct-login-email" name="username" type="email" placeholder="you@checktutors.com" autocomplete="username" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('ct-login-password').focus();}"></div>
+      <div class="field"><label for="ct-login-password">Password</label><input id="ct-login-password" name="password" type="password" placeholder="••••••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();ctLogin(event);}"></div>
+      <div id="ct-login-error" style="display:none;color:var(--red);font-size:12px;font-weight:650;margin-top:10px"></div>
+      <button type="button" id="ct-login-button" class="btn btn-primary" style="width:100%;margin-top:16px;padding:12px" onclick="ctLogin(event)">Sign In →</button>
+    </form>
   </div>
 </div>
 
@@ -203,14 +218,20 @@ tr:hover td{background:#fafafa}
     <div class="nav-tab" onclick="showPage('freebies')">🎁 Freebies</div>
     <div class="nav-tab" onclick="showPage('employees')">👥 Employees</div>
     <div class="nav-tab" onclick="showPage('business')">💼 Business</div>
-    <div class="nav-tab ct-admin-only" data-admin-only="1" onclick="showPage('timesheet')">⏱️ Timesheet</div>
-    <div class="nav-tab ct-admin-only" data-admin-only="1" onclick="showPage('adminprofile')">👤 My Profile</div>
-    <div class="nav-tab active" onclick="showPage('settings')">⚙️ Settings</div>
   </div>
-  <div class="ct-user-chip" id="ct-user-chip">
-    <div class="ct-user-avatar" id="ct-user-avatar">A</div>
-    <div class="ct-user-text"><div id="ct-user-name">Admin</div><div id="ct-user-role" style="font-size:10px;opacity:.65;font-weight:600">Admin</div></div>
-    <button class="ct-logout" onclick="ctLogout()" title="Log out">↪</button>
+  <div class="ct-profile-menu" id="ct-profile-menu">
+    <button class="ct-user-chip ct-profile-trigger" id="ct-user-chip" type="button" aria-haspopup="true" aria-expanded="false" onclick="ctToggleProfileMenu(event)">
+      <div class="ct-user-avatar" id="ct-user-avatar">A</div>
+      <div class="ct-user-text"><div id="ct-user-name">Admin</div><div id="ct-user-role" style="font-size:10px;opacity:.65;font-weight:600">Admin</div></div>
+      <span class="ct-profile-caret">▾</span>
+    </button>
+    <div class="ct-profile-dropdown" id="ct-profile-dropdown" role="menu">
+      <button type="button" class="ct-profile-item" data-profile-page="adminprofile" onclick="ctProfileNavigate('adminprofile')"><span>👤</span><span>My Profile</span></button>
+      <button type="button" class="ct-profile-item" data-profile-page="timesheet" onclick="ctProfileNavigate('timesheet')"><span>⏱️</span><span>Timesheet</span></button>
+      <button type="button" class="ct-profile-item" data-profile-page="settings" onclick="ctProfileNavigate('settings')"><span>⚙️</span><span>Settings</span></button>
+      <div class="ct-profile-divider"></div>
+      <button type="button" class="ct-profile-item ct-profile-logout" onclick="ctLogout()"><span>↪</span><span>Log Out</span></button>
+    </div>
   </div>
   <a href="https://www.checktutors.com" target="_blank" style="padding: 7px 12px; border-radius: 8px; border: 1.5px solid rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.08); font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.8); cursor: pointer; margin-left: 8px; white-space: nowrap; text-decoration: none;" onmouseover="this.style.background='rgba(255,255,255,.16)'" onmouseout="this.style.background='rgba(255,255,255,.08)'">Website</a>
 </nav>
@@ -619,7 +640,7 @@ tr:hover td{background:#fafafa}
     <div class="field form-full"><label>Task Details / Instructions</label><textarea id="ct-task-details" rows="5" placeholder="Add the quick details, links to reference material, expectations, etc."></textarea></div>
     <div class="field form-full"><label>Instructions PDF (optional)</label><input id="ct-task-instruction-file" type="file" accept="application/pdf,.pdf"><div id="ct-task-instruction-current" style="font-size:11px;color:var(--soft);margin-top:5px"></div></div>
   </div>
-  <div class="modal-ft"><button type="button" class="btn btn-danger" id="ct-task-delete-btn" onclick="ctDeleteTaskFromEdit(event)" style="display:none">Delete Task</button><button class="btn btn-secondary" onclick="closeModal('m-admin-task-edit')">Cancel</button><button class="btn btn-primary" onclick="ctSaveAssignedTask()">Save Task</button></div>
+  <div class="modal-ft"><button type="button" class="btn btn-danger" id="ct-task-delete-btn" onclick="ctDeleteTaskFromEdit(event)" style="display:none">Delete Task</button><button type="button" class="btn btn-secondary" onclick="closeModal('m-admin-task-edit')">Cancel</button><button type="button" class="btn btn-primary" id="ct-task-save-btn" onclick="ctSaveAssignedTask(event)">Save Task</button></div>
 </div></div>
 
 <!-- Task Details / Completion -->
@@ -4772,20 +4793,45 @@ ensureFreebieData();saveDB();
 
 <script>
 const CT_AUTH_USERS={
-  "francesca@checktutors.com":{id:"emp-owner",name:"Francesca",role:"Owner",hash:"a141e5acc55626a5e3bc79371cc49c9e18005573696323979b5cb4730a47d870"},
-  "admin@checktutors.com":{id:"emp-admin",name:"Admin",role:"Admin",hash:"51004f4e612863bb35d50f1f1ded3e2c956f4ad75d70ea60901ec2c9ddbbbda1"}
+  "francesca@checktutors.com":{id:"emp-owner",name:"Francesca",role:"Owner",password:"f00tbaLL18!"},
+  "admin@checktutors.com":{id:"emp-admin",name:"Admin",role:"Admin",password:"0ttawa$tudy$pots!"}
 };
 let ctCurrentUser=null,ctEmployeeTab="admin";
-async function ctSha256(s){const b=new TextEncoder().encode(s);const h=await crypto.subtle.digest("SHA-256",b);return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,"0")).join("");}
-async function ctLogin(){
-  const email=(document.getElementById("ct-login-email").value||"").trim().toLowerCase();
-  const pass=document.getElementById("ct-login-password").value||"";
-  const err=document.getElementById("ct-login-error"),u=CT_AUTH_USERS[email];
-  if(!u || await ctSha256(pass)!==u.hash){err.textContent="That email or password is not correct.";err.style.display="block";return;}
-  sessionStorage.setItem("ct_auth",JSON.stringify({id:u.id,name:u.name,role:u.role,email}));
-  ctCurrentUser={...u,email};err.style.display="none";ctUnlockPortal();
+function ctHandleLoginSubmit(event){ if(event&&event.preventDefault)event.preventDefault(); return ctLogin(event); }
+function ctLogin(event){
+  if(event&&event.preventDefault)event.preventDefault();
+  const emailEl=document.getElementById("ct-login-email");
+  const passEl=document.getElementById("ct-login-password");
+  const err=document.getElementById("ct-login-error");
+  const button=document.getElementById("ct-login-button");
+  const email=String(emailEl&&emailEl.value||"").trim().toLowerCase();
+  const pass=String(passEl&&passEl.value||"");
+  const ownerOK=email==="francesca@checktutors.com"&&pass==="f00tbaLL18!";
+  const adminOK=email==="admin@checktutors.com"&&pass==="0ttawa$tudy$pots!";
+  if(!ownerOK&&!adminOK){
+    if(err){err.textContent="That email or password is not correct.";err.style.display="block";}
+    return false;
+  }
+  const u=ownerOK?CT_AUTH_USERS["francesca@checktutors.com"]:CT_AUTH_USERS["admin@checktutors.com"];
+  ctCurrentUser={id:u.id,name:u.name,role:u.role,email:email};
+  if(err)err.style.display="none";
+  if(button){button.disabled=true;button.textContent="Signing in…";}
+  // Unlock first so local iPhone/file:// restrictions cannot block sign-in.
+  document.body.classList.remove("auth-locked");
+  try{sessionStorage.setItem("ct_auth",JSON.stringify(ctCurrentUser));}catch(e){}
+  try{ctUnlockPortal();}catch(e){
+    console.error("Portal initialization error after login",e);
+    document.body.classList.remove("auth-locked");
+    try{ctApplyRoleAccess();}catch(_e){}
+    try{showPage("dashboard");}catch(_e){
+      const dash=document.getElementById("page-dashboard");
+      if(dash){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));dash.classList.add("active");}
+    }
+  }
+  if(button){button.disabled=false;button.textContent="Sign In →";}
+  return false;
 }
-function ctLogout(){sessionStorage.removeItem("ct_auth");ctCurrentUser=null;document.body.classList.add("auth-locked");document.getElementById("ct-login-password").value="";document.getElementById("ct-login-error").style.display="none";}
+function ctLogout(){try{sessionStorage.removeItem("ct_auth");}catch(e){}ctCurrentUser=null;document.body.classList.add("auth-locked");document.getElementById("ct-login-password").value="";document.getElementById("ct-login-error").style.display="none";}
 function ctRestoreAuth(){
   try{const saved=JSON.parse(sessionStorage.getItem("ct_auth")||"null");if(saved&&CT_AUTH_USERS[saved.email]){ctCurrentUser={...CT_AUTH_USERS[saved.email],email:saved.email};ctUnlockPortal();return;}}catch(e){}
   document.body.classList.add("auth-locked");
@@ -4800,7 +4846,7 @@ function ctUnlockPortal(){
   document.body.classList.remove("auth-locked");
   ctEnsureEmployees();
   const displayName=ctAccountDisplayName();
-  if(ctCurrentUser){ctCurrentUser.name=displayName;sessionStorage.setItem("ct_auth",JSON.stringify({id:ctCurrentUser.id,name:displayName,role:ctCurrentUser.role,email:ctCurrentUser.email}));}
+  if(ctCurrentUser){ctCurrentUser.name=displayName;try{sessionStorage.setItem("ct_auth",JSON.stringify({id:ctCurrentUser.id,name:displayName,role:ctCurrentUser.role,email:ctCurrentUser.email}));}catch(e){console.warn("Session storage unavailable.",e);}}
   document.getElementById("ct-user-name").textContent=displayName;
   document.getElementById("ct-user-role").textContent=ctCurrentUser?.role||"Admin";
   document.getElementById("ct-user-avatar").textContent=(displayName||"A").charAt(0).toUpperCase();
@@ -4920,13 +4966,58 @@ function ctOpenAssignTask(id=''){
   document.getElementById('ct-task-instruction-current').innerHTML=t?.instructionFile?`Current: <b>${ctTaskEsc(t.instructionFile.name)}</b> <button type="button" class="btn btn-secondary btn-sm" onclick="ctOpenDataFile((db.adminTasks||[]).find(x=>x.id==='${t.id}')?.instructionFile)">Open</button>`:'No PDF attached.';
   document.getElementById('ct-task-delete-btn').style.display=t?'inline-block':'none';openModal('m-admin-task-edit');
 }
-async function ctSaveAssignedTask(){
-  if(ctCurrentUser?.role!=='Owner')return;ctEnsureTaskData();const id=document.getElementById('ct-task-id').value,title=document.getElementById('ct-task-title').value.trim(),assignedTo=document.getElementById('ct-task-assignee').value,dueDate=document.getElementById('ct-task-due').value,details=document.getElementById('ct-task-details').value.trim();if(!title){showToast('Add a task title.');return;}if(!assignedTo){showToast('Choose an Admin.');return;}
-  let t=id?(db.adminTasks||[]).find(x=>x.id===id):null;if(!t){t={id:'at'+Date.now(),status:'assigned',createdAt:new Date().toISOString()};db.adminTasks.unshift(t);}const emp=(db.employees||[]).find(e=>(e.email||'').toLowerCase()===assignedTo.toLowerCase());
-  t.title=title;t.assignedTo=assignedTo;t.assignedToName=emp?.name||assignedTo;t.assignedBy=ctAccountDisplayName();t.assignedByEmail=ctCurrentUser?.email||'';t.dueDate=dueDate;t.details=details;t.updatedAt=new Date().toISOString();
-  const file=document.getElementById('ct-task-instruction-file').files?.[0];if(file){if(!(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf'))){showToast('Instructions attachment must be a PDF.');return;}try{t.instructionFile=await ctTaskFileToData(file,8);}catch(e){alert(e.message);return;}}
-  saveDB();closeModal('m-admin-task-edit');ctRenderTaskDashboard();if(typeof ctRenderEmployeeTaskPanel==='function')ctRenderEmployeeTaskPanel();showToast('Task saved!');
-}
+window.ctSaveAssignedTask=async function(ev){
+  if(ev){ev.preventDefault();ev.stopPropagation();}
+  if(ctCurrentUser?.role!=='Owner'){showToast('Only the Owner can save assigned tasks.');return;}
+  ctEnsureTaskData();
+  const saveBtn=document.getElementById('ct-task-save-btn');
+  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Saving…';}
+  try{
+    const id=(document.getElementById('ct-task-id')?.value||'').trim();
+    const title=(document.getElementById('ct-task-title')?.value||'').trim();
+    const assignedTo=(document.getElementById('ct-task-assignee')?.value||'').trim();
+    const dueDate=document.getElementById('ct-task-due')?.value||'';
+    const details=(document.getElementById('ct-task-details')?.value||'').trim();
+    if(!title){showToast('Add a task title.');document.getElementById('ct-task-title')?.focus();return;}
+    if(!assignedTo){showToast('Choose an Admin.');document.getElementById('ct-task-assignee')?.focus();return;}
+
+    const emp=(db.employees||[]).find(e=>(e.email||'').toLowerCase()===assignedTo.toLowerCase());
+    const existing=id?(db.adminTasks||[]).find(x=>x.id===id):null;
+    const task=existing?{...existing}:{id:'at'+Date.now(),status:'assigned',createdAt:new Date().toISOString()};
+    task.title=title;
+    task.assignedTo=assignedTo;
+    task.assignedToName=emp?.name||assignedTo;
+    task.assignedBy=ctAccountDisplayName();
+    task.assignedByEmail=ctCurrentUser?.email||'';
+    task.dueDate=dueDate;
+    task.details=details;
+    task.updatedAt=new Date().toISOString();
+
+    const input=document.getElementById('ct-task-instruction-file');
+    const file=input?.files?.[0];
+    if(file){
+      if(!(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf'))){showToast('Instructions attachment must be a PDF.');return;}
+      task.instructionFile=await ctTaskFileToData(file,8);
+    }
+
+    if(existing){
+      const idx=db.adminTasks.findIndex(x=>x.id===existing.id);
+      if(idx>=0)db.adminTasks[idx]=task;
+    }else{
+      db.adminTasks.unshift(task);
+    }
+    saveDB();
+    closeModal('m-admin-task-edit');
+    ctRenderTaskDashboard();
+    if(typeof ctRenderEmployeeTaskPanel==='function')ctRenderEmployeeTaskPanel();
+    showToast(existing?'Task updated!':'Task assigned!');
+  }catch(e){
+    console.error('Task save failed',e);
+    alert('The task could not be saved. '+(e?.message||'Please try again.'));
+  }finally{
+    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Task';}
+  }
+};
 window.ctDeleteTaskFromEdit=function(ev){if(ev){ev.preventDefault();ev.stopPropagation();}const id=(document.getElementById('ct-task-id')?.value||'').trim();if(!id){showToast('Could not find this task.');return;}if(ctCurrentUser?.role!=='Owner'){showToast('Only the Owner can delete assigned tasks.');return;}const task=(db.adminTasks||[]).find(x=>x.id===id);if(!task){showToast('Task was already removed.');closeModal('m-admin-task-edit');ctRenderTaskDashboard();return;}if(!confirm('Delete task “'+(task.title||'Untitled task')+'”?'))return;db.adminTasks=(db.adminTasks||[]).filter(x=>x.id!==id);saveDB();closeModal('m-admin-task-edit');closeModal('m-admin-task-view');ctRenderTaskDashboard();if(typeof ctRenderEmployeeTaskPanel==='function')ctRenderEmployeeTaskPanel();showToast('Task deleted.');};
 function ctTaskForCurrentAdmin(t){return ctCurrentUser?.role==='Admin'&&(t.assignedTo||'').toLowerCase()===(ctCurrentUser.email||'').toLowerCase();}
 function ctOpenTask(id){ctEnsureTaskData();const t=(db.adminTasks||[]).find(x=>x.id===id);if(!t)return;if(ctCurrentUser?.role!=='Owner'&&!ctTaskForCurrentAdmin(t))return;document.getElementById('ct-task-view-id').value=t.id;document.getElementById('ct-task-view-title').textContent='📌 '+t.title;document.getElementById('ct-task-view-meta').innerHTML=`Assigned by <b>${ctTaskEsc(t.assignedBy||'Owner')}</b> · Due ${ctTaskEsc(ctTaskDateLabel(t.dueDate))} · ${ctTaskStatusBadge(t)}`;
@@ -5259,6 +5350,16 @@ ctRestoreAuth();
 
   // If auth was already restored before this enhancement script ran, apply now.
   if(window.ctCurrentUser){ctApplyRoleAccess();renderTodos();ctRenderAdminHoursDashboard();}
+})();
+</script>
+<!-- Check Tutors build: 2026-08-23 task-save-password-manager-fix -->
+
+<script>
+(function(){
+  window.ctToggleProfileMenu=function(ev){if(ev)ev.stopPropagation();const menu=document.getElementById('ct-profile-menu');if(!menu)return;const open=!menu.classList.contains('open');menu.classList.toggle('open',open);const trigger=document.getElementById('ct-user-chip');if(trigger)trigger.setAttribute('aria-expanded',open?'true':'false');};
+  window.ctProfileNavigate=function(page){const menu=document.getElementById('ct-profile-menu');if(menu)menu.classList.remove('open');const trigger=document.getElementById('ct-user-chip');if(trigger)trigger.setAttribute('aria-expanded','false');if(typeof showPage==='function')showPage(page);};
+  document.addEventListener('click',function(ev){const menu=document.getElementById('ct-profile-menu');if(menu&&!menu.contains(ev.target)){menu.classList.remove('open');const trigger=document.getElementById('ct-user-chip');if(trigger)trigger.setAttribute('aria-expanded','false');}});
+  const priorShow=window.showPage;if(typeof priorShow==='function'){window.showPage=function(name){const result=priorShow.apply(this,arguments);document.querySelectorAll('.ct-profile-item[data-profile-page]').forEach(el=>el.classList.toggle('active',el.dataset.profilePage===name));return result;};}
 })();
 </script>
 </body></html>
