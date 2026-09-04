@@ -1120,6 +1120,30 @@ Notes: A bit rusty with fractions, plan to give her a refresher for next lesson 
     <div class="field"><label>How Did You Hear About Us?</label>
       <select id="ep-referral"><option value="">Select...</option><option>Friends/Family</option><option>Social Media</option><option>Website</option><option>School Community</option><option>Referral</option><option>Other</option></select>
     </div>
+    <div class="intake-sep form-full">📝 Progress Reports</div>
+    <div class="field form-full">
+      <label>Progress Report Frequency</label>
+      <select id="ep-pr-frequency" onchange="toggleEPProgressCustom()">
+        <option value="sessions-4">Every 4 sessions</option>
+        <option value="sessions-custom">Every custom number of sessions</option>
+        <option value="days-7">Weekly</option>
+        <option value="days-14">Every 2 weeks</option>
+        <option value="months-1">Monthly</option>
+        <option value="months-2">Every 2 months</option>
+        <option value="months-3">Every 3 months</option>
+        <option value="days-custom">Every custom number of days</option>
+        <option value="none">No automatic reminder</option>
+      </select>
+      <div style="font-size:11px;color:var(--soft);margin-top:5px">Controls when the CRM reminds you a progress report is due.</div>
+    </div>
+    <div class="field form-full" id="ep-pr-custom-sessions-wrap" style="display:none">
+      <label>Report Every How Many Sessions?</label>
+      <input id="ep-pr-custom-sessions" type="number" min="1" step="1" placeholder="e.g. 6">
+    </div>
+    <div class="field form-full" id="ep-pr-custom-days-wrap" style="display:none">
+      <label>Report Every How Many Days?</label>
+      <input id="ep-pr-custom-days" type="number" min="1" step="1" placeholder="e.g. 21">
+    </div>
     <div class="intake-sep form-full">📋 Internal Notes</div>
     <div class="field form-full"><label>Tutor Notes (internal only)</label><textarea id="ep-notes" placeholder="Your private notes about this student..."></textarea></div>
   </div>
@@ -1436,14 +1460,15 @@ function renderDash(){
     if(s.action==="Send renewal reminder")acts.push(`<div class="alert-row al-amber"><div class="al-icon">&#128276;</div><div class="al-text">${st.name}<div class="al-sub">Package expired - send renewal nudge</div></div></div>`);
     if(s.action==="Renewal coming due")acts.push(`<div class="alert-row al-amber"><div class="al-icon">&#9201;</div><div class="al-text">${st.name}<div class="al-sub">Expires in ${s.daysLeft}d</div></div></div>`);
   });
-  // Progress report reminders every 4 sessions
+  // Student-specific progress report reminders
   if(!db.progressReports)db.progressReports=[];
   db.students.filter(s=>!s.archived).forEach(st=>{
-    const sessCount=db.sessions.filter(s=>s.studentId===st.id).length;
-    const lastReport=(db.progressReports||[]).filter(r=>r.studentId===st.id).sort((a,b)=>b.sessionCount-a.sessionCount)[0];
-    const lastReportSess=lastReport?lastReport.sessionCount:0;
-    if(sessCount>=4&&sessCount>lastReportSess&&Math.floor(sessCount/4)>Math.floor(lastReportSess/4)){
-      acts.push(`<div class="alert-row" style="background:#e3f2fd;border-left:4px solid #1a73e8"><div class="al-icon">&#128221;</div><div class="al-text" style="color:#1565c0">${st.name}<div class="al-sub" style="color:#1565c0">Progress report due — ${sessCount} sessions completed. <span style="cursor:pointer;font-weight:700;text-decoration:underline" onclick="openProgressReport('${st.id}')">Fill out now</span></div></div></div>`);
+    const info=progressDueInfo(st);
+    if(info.due&&!info.disabled){
+      const reason=info.schedule.type==="sessions"
+        ? `${info.sessCount} sessions completed · ${progressScheduleLabel(info.schedule)}`
+        : `${progressScheduleLabel(info.schedule)} · ${info.nextText}`;
+      acts.push(`<div class="alert-row" style="background:#e3f2fd;border-left:4px solid #1a73e8"><div class="al-icon">&#128221;</div><div class="al-text" style="color:#1565c0">${st.name}<div class="al-sub" style="color:#1565c0">Progress report due — ${reason}. <span style="cursor:pointer;font-weight:700;text-decoration:underline" onclick="openProgressReport('${st.id}')">Fill out now</span></div></div></div>`);
     }
   });
   document.getElementById("d-actions").innerHTML=acts.length?acts.join(""):`<div class="empty"><div class="empty-icon">&#9989;</div><p>All clear!</p></div>`;
@@ -1926,6 +1951,11 @@ function openEditProfile(sid){
   document.getElementById("ep-freq").value=p.frequency||"";
   document.getElementById("ep-format").value=p.format||"";
   document.getElementById("ep-referral").value=p.referral||"";
+  const prSchedule=getProgressSchedule(s);
+  document.getElementById("ep-pr-frequency").value=progressScheduleOptionValue(prSchedule);
+  document.getElementById("ep-pr-custom-sessions").value=prSchedule.type==="sessions"?prSchedule.interval:"";
+  document.getElementById("ep-pr-custom-days").value=prSchedule.type==="days"&&![7,14].includes(prSchedule.interval)?prSchedule.interval:"";
+  toggleEPProgressCustom();
   setCheckedVals("ep-cb-subjects",p.subjects||[]);
   document.getElementById("ep-subject-other").value="";
   setCheckedVals("ep-cb-reasons",p.reasons||[]);
@@ -1959,6 +1989,7 @@ function saveEditProfile(){
     preferredTime:getChecked("ep-cb-times"),learningStyle:getChecked("ep-cb-learning"),
     successLooks:document.getElementById("ep-success").value.trim(),extra:document.getElementById("ep-extra").value.trim(),
     referral:document.getElementById("ep-referral").value,
+    progressReportSchedule:scheduleFromControls("ep-pr-frequency","ep-pr-custom-sessions","ep-pr-custom-days"),
   };
   saveDB();closeModal("m-edit-profile");showDetail(sid);
   const tabEl=[...document.querySelectorAll("#dtabs-"+sid+" .tab")].find(t=>t.textContent.includes("Profile"));
@@ -3826,6 +3857,122 @@ function renderExpenses(){
 // PROGRESS REPORTS
 // ═══════════════════════════════════════════════════════════════════════════════
 if(!db.progressReports)db.progressReports=[];
+
+function prScheduleCore(raw){
+  if(!raw||typeof raw!=="object")return{type:"sessions",interval:4};
+  const type=["sessions","days","months","none"].includes(raw.type)?raw.type:"sessions";
+  if(type==="none")return{type:"none",interval:0};
+  return{type,interval:Math.max(1,parseInt(raw.interval,10)||1)};
+}
+function progressScheduleLabel(raw){
+  const s=prScheduleCore(raw);
+  if(s.type==="none")return"No automatic reminder";
+  if(s.type==="sessions")return s.interval===1?"Every session":`Every ${s.interval} sessions`;
+  if(s.type==="days"){
+    if(s.interval===7)return"Weekly";
+    if(s.interval===14)return"Every 2 weeks";
+    return`Every ${s.interval} days`;
+  }
+  if(s.type==="months")return s.interval===1?"Monthly":`Every ${s.interval} months`;
+  return"Every 4 sessions";
+}
+function getProgressSchedule(student){
+  const raw=student&&student.profile&&student.profile.progressReportSchedule;
+  const s=prScheduleCore(raw);
+  return{...s,label:progressScheduleLabel(s)};
+}
+function progressScheduleOptionValue(raw){
+  const s=prScheduleCore(raw);
+  if(s.type==="none")return"none";
+  if(s.type==="sessions"&&s.interval===4)return"sessions-4";
+  if(s.type==="sessions")return"sessions-custom";
+  if(s.type==="days"&&s.interval===7)return"days-7";
+  if(s.type==="days"&&s.interval===14)return"days-14";
+  if(s.type==="days")return"days-custom";
+  if(s.type==="months"&&[1,2,3].includes(s.interval))return`months-${s.interval}`;
+  return"months-1";
+}
+function scheduleFromControls(selectId,sessionsId,daysId){
+  const v=document.getElementById(selectId)?.value||"sessions-4";
+  if(v==="none")return{type:"none",interval:0};
+  if(v==="sessions-4")return{type:"sessions",interval:4};
+  if(v==="sessions-custom")return{type:"sessions",interval:Math.max(1,parseInt(document.getElementById(sessionsId)?.value,10)||4)};
+  if(v==="days-7")return{type:"days",interval:7};
+  if(v==="days-14")return{type:"days",interval:14};
+  if(v==="days-custom")return{type:"days",interval:Math.max(1,parseInt(document.getElementById(daysId)?.value,10)||30)};
+  if(v.startsWith("months-"))return{type:"months",interval:Math.max(1,parseInt(v.split("-")[1],10)||1)};
+  return{type:"sessions",interval:4};
+}
+function addMonthsDate(dateStr,months){
+  const p=(dateStr||today()).split("-").map(Number);
+  const target=new Date(p[0],p[1]-1+months,1);
+  const maxDay=new Date(target.getFullYear(),target.getMonth()+1,0).getDate();
+  const d=Math.min(p[2],maxDay);
+  return`${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+function getLastProgressReport(sid){
+  return(db.progressReports||[]).filter(r=>r.studentId===sid).sort((a,b)=>{
+    const d=(b.date||"").localeCompare(a.date||"");
+    return d!==0?d:Number(b.sessionCount||0)-Number(a.sessionCount||0);
+  })[0]||null;
+}
+function getFirstSessionDate(sid){
+  return(db.sessions||[]).filter(s=>s.studentId===sid&&s.date).sort((a,b)=>a.date.localeCompare(b.date))[0]?.date||null;
+}
+function progressDueInfo(student){
+  const schedule=getProgressSchedule(student);
+  const sessCount=(db.sessions||[]).filter(s=>s.studentId===student.id).length;
+  const last=getLastProgressReport(student.id);
+  const lastSess=Number(last?.sessionCount||0);
+
+  if(schedule.type==="none"){
+    return{due:false,disabled:true,schedule,sessCount,last,nextText:"No automatic reminder",progressText:"Reminders off"};
+  }
+  if(schedule.type==="sessions"){
+    const nextAt=lastSess+schedule.interval;
+    const sinceLast=Math.max(0,sessCount-lastSess);
+    const due=sessCount>=nextAt;
+    return{
+      due,disabled:false,schedule,sessCount,last,
+      nextText:due?`Due now · Session ${nextAt}`:`Due after Session ${nextAt}`,
+      progressText:`${Math.min(sinceLast,schedule.interval)}/${schedule.interval} sessions since last report`
+    };
+  }
+
+  const anchor=last?.date||getFirstSessionDate(student.id);
+  if(!anchor){
+    return{due:false,disabled:false,schedule,sessCount,last,nextText:"Starts after first logged session",progressText:"No sessions logged yet"};
+  }
+  const nextDate=schedule.type==="months"?addMonthsDate(anchor,schedule.interval):addDays(anchor,schedule.interval);
+  const due=today()>=nextDate;
+  const days=daysBetween(today(),nextDate);
+  return{
+    due,disabled:false,schedule,sessCount,last,nextDate,
+    nextText:due?`Due now · ${fmt(nextDate)}`:`Next due ${fmt(nextDate)}${days>=0?` (${days}d)`:""}`,
+    progressText:last?`Last report ${fmt(last.date)}`:`Schedule started ${fmt(anchor)}`
+  };
+}
+function toggleEPProgressCustom(){
+  const v=document.getElementById("ep-pr-frequency")?.value||"sessions-4";
+  const s=document.getElementById("ep-pr-custom-sessions-wrap");
+  const d=document.getElementById("ep-pr-custom-days-wrap");
+  if(s)s.style.display=v==="sessions-custom"?"block":"none";
+  if(d)d.style.display=v==="days-custom"?"block":"none";
+}
+function toggleProgressTabCustom(sid){
+  const v=document.getElementById("prfreq-"+sid)?.value||"sessions-4";
+  const s=document.getElementById("prfreq-sessions-wrap-"+sid);
+  const d=document.getElementById("prfreq-days-wrap-"+sid);
+  if(s)s.style.display=v==="sessions-custom"?"block":"none";
+  if(d)d.style.display=v==="days-custom"?"block":"none";
+}
+function saveProgressScheduleFromTab(sid){
+  const st=db.students.find(x=>x.id===sid);if(!st)return;
+  if(!st.profile)st.profile={};
+  st.profile.progressReportSchedule=scheduleFromControls("prfreq-"+sid,"prfreq-sessions-"+sid,"prfreq-days-"+sid);
+  saveDB();renderProgressReportsTab(sid);renderDash();showToast("Progress report frequency saved!");
+}
+
 if(!db.prCounter)db.prCounter=1;
 let editingPRId=null,prStudentId=null;
 const PR_LABELS={excellent:"Excellent",good:"Good Progress",steady:"Steady Progress",improving:"Improving","needs-work":"Needs More Work"};
@@ -3890,7 +4037,7 @@ function openProgressReport(sid){
   const s=db.students.find(x=>x.id===sid);if(!s)return;
   const n=db.sessions.filter(x=>x.studentId===sid).length;
   const sn=document.getElementById("pr-student-name");if(sn)sn.textContent=s.name;
-  const sp=document.getElementById("pr-period");if(sp)sp.textContent="After session "+n+" | "+fmt(today());
+  const sp=document.getElementById("pr-period");if(sp)sp.textContent="After session "+n+" | "+fmt(today())+" | "+progressScheduleLabel(getProgressSchedule(s));
   ["pr-period-input","pr-topics","pr-strengths","pr-improvement","pr-comments","pr-next-focus","pr-recommendations"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   const ses=document.getElementById("pr-sessions");if(ses)ses.value=n;
   document.getElementById("pr-overall").value="";
@@ -3907,7 +4054,7 @@ function openEditProgressReport(sid,prId){
   const pr=(db.progressReports||[]).find(r=>r.id===prId);
   if(!s||!pr)return;
   const sn=document.getElementById("pr-student-name");if(sn)sn.textContent=s.name;
-  const sp=document.getElementById("pr-period");if(sp)sp.textContent="Report from "+fmt(pr.date);
+  const sp=document.getElementById("pr-period");if(sp)sp.textContent="Report from "+fmt(pr.date)+" | "+progressScheduleLabel(getProgressSchedule(s));
   const fields={"pr-period-input":pr.period,"pr-sessions":pr.sessionCount,"pr-topics":pr.topics,"pr-strengths":pr.strengths,"pr-improvement":pr.improvement,"pr-comments":pr.comments,"pr-next-focus":pr.nextFocus,"pr-recommendations":pr.recommendations};
   Object.entries(fields).forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.value=v||"";});
   // Restore level
@@ -3945,8 +4092,53 @@ function renderProgressReportsTab(sid){
   const el=document.getElementById("dt-progress-"+sid);if(!el)return;
   const s=db.students.find(x=>x.id===sid);if(!s)return;
   const rpts=(db.progressReports||[]).filter(r=>r.studentId===sid).sort((a,b)=>b.date.localeCompare(a.date));
-  el.innerHTML=`<div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center">&#128221; Progress Reports<button class="btn btn-primary btn-sm" onclick="openProgressReport('${sid}')">+ New Report</button></div>
-  ${rpts.length===0?`<div class="empty"><div class="empty-icon">&#128221;</div><p>No reports yet.</p><p style="font-size:12px;color:var(--soft);margin-top:5px">A dashboard reminder appears every 4 sessions.</p></div>`:
+  const schedule=getProgressSchedule(s);
+  const due=progressDueInfo(s);
+  const opt=progressScheduleOptionValue(schedule);
+  const statusColor=due.disabled?"var(--soft)":due.due?"var(--red)":"var(--green)";
+  const statusBg=due.disabled?"#f3f4f6":due.due?"var(--red-light)":"var(--green-light)";
+  el.innerHTML=`
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <span>⚙️ Progress Report Schedule</span>
+      <span style="background:${statusBg};color:${statusColor};padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700">${due.disabled?"Reminders Off":due.due?"Report Due":"On Schedule"}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,1fr);gap:12px;align-items:end">
+      <div class="field" style="margin:0">
+        <label>Frequency</label>
+        <select id="prfreq-${sid}" onchange="toggleProgressTabCustom('${sid}')">
+          <option value="sessions-4" ${opt==="sessions-4"?"selected":""}>Every 4 sessions</option>
+          <option value="sessions-custom" ${opt==="sessions-custom"?"selected":""}>Every custom number of sessions</option>
+          <option value="days-7" ${opt==="days-7"?"selected":""}>Weekly</option>
+          <option value="days-14" ${opt==="days-14"?"selected":""}>Every 2 weeks</option>
+          <option value="months-1" ${opt==="months-1"?"selected":""}>Monthly</option>
+          <option value="months-2" ${opt==="months-2"?"selected":""}>Every 2 months</option>
+          <option value="months-3" ${opt==="months-3"?"selected":""}>Every 3 months</option>
+          <option value="days-custom" ${opt==="days-custom"?"selected":""}>Every custom number of days</option>
+          <option value="none" ${opt==="none"?"selected":""}>No automatic reminder</option>
+        </select>
+      </div>
+      <div>
+        <div id="prfreq-sessions-wrap-${sid}" class="field" style="display:${opt==="sessions-custom"?"block":"none"};margin:0">
+          <label>Every How Many Sessions?</label>
+          <input id="prfreq-sessions-${sid}" type="number" min="1" step="1" value="${schedule.type==="sessions"?schedule.interval:4}">
+        </div>
+        <div id="prfreq-days-wrap-${sid}" class="field" style="display:${opt==="days-custom"?"block":"none"};margin:0">
+          <label>Every How Many Days?</label>
+          <input id="prfreq-days-${sid}" type="number" min="1" step="1" value="${schedule.type==="days"&&![7,14].includes(schedule.interval)?schedule.interval:30}">
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px;padding-top:11px;border-top:1px solid var(--border)">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--navy)">${progressScheduleLabel(schedule)}</div>
+        <div style="font-size:12px;color:var(--soft);margin-top:2px">${due.nextText} · ${due.progressText}</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="saveProgressScheduleFromTab('${sid}')">Save Frequency</button>
+    </div>
+  </div>
+  <div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center">&#128221; Progress Reports<button class="btn btn-primary btn-sm" onclick="openProgressReport('${sid}')">+ New Report</button></div>
+  ${rpts.length===0?`<div class="empty"><div class="empty-icon">&#128221;</div><p>No reports yet.</p><p style="font-size:12px;color:var(--soft);margin-top:5px">Current schedule: ${progressScheduleLabel(schedule)}.</p></div>`:
   rpts.map(r=>`<div style="background:var(--navy-light);border-radius:12px;padding:16px;margin-bottom:12px;border:1.5px solid var(--navy-mid)">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
       <div><div style="font-weight:700;font-size:15px;color:var(--navy)">${r.period||"Progress Report"}</div><div style="font-size:12px;color:var(--soft)">${fmt(r.date)} &bull; Session ${r.sessionCount||"?"}</div></div>
